@@ -12,6 +12,9 @@ CONFIG_FILE = Path(__file__).parent / "config.json"
 DEFAULT_CONFIG = {
     "gemini_model": os.getenv("GEMINI_MODEL", "gemini-flash-latest"),
     "annotation_mode": os.getenv("ANNOTATION_MODE", "high_level"),
+    "ui_mode": os.getenv("UI_MODE", "full"),
+    "pinned_top": True,
+    "position_locked": False,
     "global_hotkey": os.getenv("GLOBAL_HOTKEY", "<ctrl>+<space>"),
     "auto_detect_clipboard": os.getenv("AUTO_DETECT_CLIPBOARD", "false").lower() == "true",
     "auto_copy": os.getenv("AUTO_COPY_CLIPBOARD", "true").lower() == "true",

@@ -56,8 +56,123 @@ class VLAAppGUI:
         self.style.configure("SubHeader.TLabel", font=("Segoe UI", 11, "bold"), foreground=self.text_color)
         self.style.configure("Status.TLabel", font=("Segoe UI", 9, "italic"), foreground="#9399b2")
 
-        self.style.configure("Action.TButton", font=("Segoe UI", 10, "bold"), background=self.accent_color, foreground="#11111b")
         self.style.map("Action.TButton", background=[("active", "#b4befe")])
+
+        # Window state flags
+        self.is_pinned = config.get("pinned_top", True)
+        self.is_locked = config.get("position_locked", False)
+        self.current_ui_mode = config.get("ui_mode", "full")
+
+        # Set always on top if pinned
+        if self.is_pinned:
+            self.root.attributes("-topmost", True)
+
+    def _on_mini_scroll(self, event):
+        """Invisible Mouse-Wheel Scrolling for compact text box."""
+        if hasattr(self, "mini_caption_text") and self.mini_caption_text.winfo_exists():
+            if event.delta:
+                self.mini_caption_text.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def toggle_pin_top(self):
+        self.is_pinned = not self.is_pinned
+        config.set("pinned_top", self.is_pinned)
+        self.root.attributes("-topmost", self.is_pinned)
+        if hasattr(self, "pin_btn"):
+            self.pin_btn.config(text="📌 Pinned" if self.is_pinned else "📌 Unpinned")
+
+    def toggle_lock_pos(self):
+        self.is_locked = not self.is_locked
+        config.set("position_locked", self.is_locked)
+        if hasattr(self, "lock_btn"):
+            self.lock_btn.config(text="🔒 Locked" if self.is_locked else "🔓 Unlocked")
+
+    def toggle_ui_mode(self):
+        new_mode = "mini" if self.current_ui_mode == "full" else "full"
+        self.current_ui_mode = new_mode
+        config.set("ui_mode", new_mode)
+
+        # Clear existing widgets
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        if new_mode == "mini":
+            self.root.geometry("450x140")
+            self.root.resizable(False, False)
+            self.build_mini_ui()
+        else:
+            self.root.geometry("850x680")
+            self.root.resizable(True, True)
+            self.build_ui()
+
+    def build_mini_ui(self):
+        # Master Mini Frame (450x140, 3-column layout)
+        mini_master = tk.Frame(self.root, bg=self.card_bg, padx=8, pady=8)
+        mini_master.pack(fill="both", expand=True)
+
+        # Column 1 (Left ~40%): Caption Text & Badges (Invisible Mouse-Wheel Scroll)
+        col1 = tk.Frame(mini_master, bg="#181825", padx=6, pady=6)
+        col1.pack(side="left", fill="both", expand=True, padx=(0, 4))
+
+        header_sub = tk.Frame(col1, bg="#181825")
+        header_sub.pack(fill="x", pady=(0, 2))
+
+        self.mini_mode_label = tk.Label(header_sub, text="T1 High-Level", font=("Segoe UI", 8, "bold"), bg="#181825", fg=self.success_color)
+        self.mini_mode_label.pack(side="left")
+
+        self.mini_latency_label = tk.Label(header_sub, text="", font=("Segoe UI", 8), bg="#181825", fg="#9399b2")
+        self.mini_latency_label.pack(side="right")
+
+        # Invisible-scroll text box
+        self.mini_caption_text = tk.Text(col1, height=4, font=("Segoe UI", 9), bg="#181825", fg=self.text_color, wrap="word", relief="flat", borderwidth=0)
+        self.mini_caption_text.pack(fill="both", expand=True)
+        self.mini_caption_text.insert("1.0", "Win+Shift+S snip ➔ Ctrl+Space")
+        self.mini_caption_text.bind("<MouseWheel>", self._on_mini_scroll)
+
+        # Column 2 (Center ~30%): Toggle Icons & Controls
+        col2 = tk.Frame(mini_master, bg=self.card_bg, padx=4)
+        col2.pack(side="left", fill="y", padx=2)
+
+        self.mini_mode_btn = tk.Button(col2, text=f"Mode: {self.mode_var.get().upper()}", font=("Segoe UI", 8, "bold"), bg="#313244", fg=self.accent_color, relief="flat", pady=2, command=self._toggle_mini_mode_val)
+        self.mini_mode_btn.pack(fill="x", pady=1)
+
+        auto_st = "⚡ Auto" if config.get("auto_detect_clipboard", False) else "🎯 Manual"
+        self.mini_auto_btn = tk.Button(col2, text=auto_st, font=("Segoe UI", 8), bg="#313244", fg=self.text_color, relief="flat", pady=2, command=self._toggle_mini_auto_val)
+        self.mini_auto_btn.pack(fill="x", pady=1)
+
+        self.pin_btn = tk.Button(col2, text="📌 Pinned" if self.is_pinned else "📌 Unpinned", font=("Segoe UI", 8), bg="#313244", fg=self.text_color, relief="flat", pady=2, command=self.toggle_pin_top)
+        self.pin_btn.pack(fill="x", pady=1)
+
+        self.lock_btn = tk.Button(col2, text="🔒 Locked" if self.is_locked else "🔓 Unlocked", font=("Segoe UI", 8), bg="#313244", fg=self.text_color, relief="flat", pady=2, command=self.toggle_lock_pos)
+        self.lock_btn.pack(fill="x", pady=1)
+
+        btn_expand = tk.Button(col2, text="↗ Full View", font=("Segoe UI", 8, "bold"), bg=self.accent_color, fg="#11111b", relief="flat", pady=2, command=self.toggle_ui_mode)
+        btn_expand.pack(fill="x", pady=(2, 0))
+
+        # Column 3 (Right ~30%): Manual Drop & Process Action Zone
+        col3 = tk.Frame(mini_master, bg="#181825", padx=6, pady=6)
+        col3.pack(side="left", fill="both", padx=(4, 0))
+
+        tk.Label(col3, text="📥 Drop / Action", font=("Segoe UI", 8, "bold"), bg="#181825", fg=self.text_color).pack(pady=(0, 4))
+
+        btn_proc = tk.Button(col3, text="⚡ Process\nClipboard", font=("Segoe UI", 8, "bold"), bg=self.accent_color, fg="#11111b", relief="flat", pady=4, command=self.trigger_manual_snip)
+        btn_proc.pack(fill="both", expand=True)
+
+    def _toggle_mini_mode_val(self):
+        cur = self.mode_var.get()
+        new_val = "detailed" if cur == "high_level" else "high_level"
+        self.mode_var.set(new_val)
+        self.on_mode_changed()
+        if hasattr(self, "mini_mode_btn"):
+            self.mini_mode_btn.config(text=f"Mode: {new_val.upper()}")
+
+    def _toggle_mini_auto_val(self):
+        cur = config.get("auto_detect_clipboard", False)
+        new_val = not cur
+        config.set("auto_detect_clipboard", new_val)
+        if hasattr(self, "auto_detect_var"):
+            self.auto_detect_var.set(new_val)
+        if hasattr(self, "mini_auto_btn"):
+            self.mini_auto_btn.config(text="⚡ Auto" if new_val else "🎯 Manual")
 
     def build_ui(self):
         # Header bar
@@ -66,6 +181,10 @@ class VLAAppGUI:
 
         title_label = ttk.Label(header_frame, text="⚡ VLA Annotation Automation", style="Header.TLabel")
         title_label.pack(side="left")
+
+        # Mini mode switch button in header
+        btn_mini = tk.Button(header_frame, text="↙ Mini Mode", font=("Segoe UI", 9, "bold"), bg=self.card_bg, fg=self.accent_color, relief="flat", command=self.toggle_ui_mode)
+        btn_mini.pack(side="left", padx=15)
 
         hotkey_str = config.get("global_hotkey", "<ctrl>+<space>")
         self.status_var = tk.StringVar(value=f"Hotkey: [{hotkey_str}] Active | Ready for Snip")
@@ -282,23 +401,36 @@ class VLAAppGUI:
         self.root.after(0, lambda: self._update_ui_with_result(result))
 
     def _update_ui_with_result(self, result: Dict[str, Any]):
-        if "error" in result:
+        caption = result.get("high_level_caption", result.get("error", ""))
+        lat = result.get("latency_seconds", 0)
+
+        # Update Mini View widgets if present
+        if hasattr(self, "mini_caption_text") and self.mini_caption_text.winfo_exists():
+            self.mini_caption_text.delete("1.0", "end")
+            self.mini_caption_text.insert("1.0", caption)
+            mode_tag = "T2 Detailed" if result.get("annotation_mode") == "detailed" else "T1 High-Level"
+            if hasattr(self, "mini_mode_label"):
+                self.mini_mode_label.config(text=mode_tag)
+            if hasattr(self, "mini_latency_label"):
+                self.mini_latency_label.config(text=f"⏱️ {lat}s | 📋 Copied")
+
+        # Update Full View widgets if present
+        if hasattr(self, "caption_text") and self.caption_text.winfo_exists():
+            if "error" in result:
+                self.caption_text.delete("1.0", "end")
+                self.caption_text.insert("1.0", f"Error: {result['error']}")
+                self.rule_status_var.set(f"Error: {result['error']}")
+                self.rule_status_label.config(fg=self.danger_color)
+                self.status_var.set("Ready for Snip (Error encountered)")
+                return
+
             self.caption_text.delete("1.0", "end")
-            self.caption_text.insert("1.0", f"Error: {result['error']}")
-            self.rule_status_var.set(f"Error: {result['error']}")
-            self.rule_status_label.config(fg=self.danger_color)
-            self.status_var.set("Ready for Snip (Error encountered)")
-            return
+            self.caption_text.insert("1.0", caption)
 
-        # Update Caption
-        caption = result.get("high_level_caption", "")
-        self.caption_text.delete("1.0", "end")
-        self.caption_text.insert("1.0", caption)
-
-        # Update OAG
-        self.obj_var.set(result.get("object", "-"))
-        self.act_var.set(result.get("action", "-"))
-        self.goal_var.set(result.get("goal", "-"))
+            if hasattr(self, "obj_var"):
+                self.obj_var.set(result.get("object", "-"))
+                self.act_var.set(result.get("action", "-"))
+                self.goal_var.set(result.get("goal", "-"))
 
         # Update Latency
         lat = result.get("latency_seconds", 0)
