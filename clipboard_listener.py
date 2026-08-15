@@ -77,6 +77,22 @@ class ClipboardListener:
             return None
         return self.process_clipboard_frame(override_img=self.active_image, mode=target_mode)
 
+    def get_clipboard_image(self, retries: int = 6, delay: float = 0.15) -> Optional[Image.Image]:
+        """
+        Retries grabbing clipboard image with backoff delay to allow Windows Snipping Tool
+        (Win+Shift+S) to finish committing bitmap bytes without locked-clipboard collisions.
+        """
+        for i in range(retries):
+            try:
+                img = ImageGrab.grabclipboard()
+                if img and isinstance(img, Image.Image):
+                    return img
+            except Exception:
+                pass
+            if i < retries - 1:
+                time.sleep(delay)
+        return None
+
     def process_clipboard_frame(self, override_img: Optional[Image.Image] = None, mode: Optional[str] = None) -> Dict[str, Any]:
         """
         Task 2 Dual-Caption Single-Snip Memory Cache:
@@ -86,10 +102,7 @@ class ClipboardListener:
         img = override_img
 
         if img is None:
-            try:
-                img = ImageGrab.grabclipboard()
-            except Exception as e:
-                print(f"[ClipboardListener] Error grabbing clipboard: {e}")
+            img = self.get_clipboard_image(retries=6, delay=0.15)
 
         if img is None or not isinstance(img, Image.Image):
             # Fall back to active image in memory if available
@@ -176,12 +189,12 @@ class ClipboardListener:
         Triggers automatically when a new screenshot image is detected.
         """
         while not self._stop_poller.is_set():
-            time.sleep(0.3)
+            time.sleep(0.5)
             if not config.get("auto_detect_clipboard", False):
                 continue
 
             try:
-                img = ImageGrab.grabclipboard()
+                img = self.get_clipboard_image(retries=1, delay=0)
                 if img and isinstance(img, Image.Image):
                     if img.mode != "RGB":
                         img = img.convert("RGB")
@@ -189,7 +202,7 @@ class ClipboardListener:
                     if self.last_img_hash is None or img_hash != self.last_img_hash:
                         print("[ClipboardListener Autonomous] New screenshot detected! Auto-processing...")
                         self.last_img_hash = img_hash
-                        self.process_clipboard_frame()
+                        self.process_clipboard_frame(override_img=img)
                 else:
                     # Clipboard holds text or non-image; reset hash for immediate next snip detection
                     self.last_img_hash = None

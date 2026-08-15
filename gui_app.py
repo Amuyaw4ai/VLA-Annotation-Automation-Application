@@ -18,14 +18,19 @@ class VLAAppGUI:
 
         if self.current_ui_mode == "mini":
             self.root.minsize(260, 90)
-            self.root.maxsize(650, 160)
-            self.root.geometry("340x115")
+            self.root.maxsize(1000, 300)
+            saved_geom = config.get("mini_geometry")
+            self.root.geometry(saved_geom if saved_geom else "340x115")
         else:
             self.root.minsize(750, 580)
             self.root.geometry("850x680")
 
         # Style configuration
         self.setup_styles()
+
+        # Save custom window size and position on resize/move
+        self._configure_timer = None
+        self.root.bind("<Configure>", self._on_window_configure)
 
         # Connect listener callback to UI updater
         clipboard_service.callback = self.on_frame_processed
@@ -41,6 +46,18 @@ class VLAAppGUI:
 
         # Handle window close
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def _on_window_configure(self, event):
+        """Saves custom mini window dimensions and screen position to config."""
+        if self.current_ui_mode == "mini":
+            if self._configure_timer:
+                self.root.after_cancel(self._configure_timer)
+            self._configure_timer = self.root.after(500, self._save_mini_geometry)
+
+    def _save_mini_geometry(self):
+        if self.current_ui_mode == "mini" and self.root.winfo_exists():
+            geom = self.root.geometry()
+            config.set("mini_geometry", geom)
 
     def setup_styles(self):
         self.style = ttk.Style()
@@ -109,8 +126,9 @@ class VLAAppGUI:
 
         if new_mode == "mini":
             self.root.minsize(260, 90)
-            self.root.maxsize(650, 160)
-            self.root.geometry("340x115")
+            self.root.maxsize(1000, 300)
+            saved_geom = config.get("mini_geometry")
+            self.root.geometry(saved_geom if saved_geom else "340x115")
             self.root.resizable(True, True)
             self.build_mini_ui()
         else:
