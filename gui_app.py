@@ -220,9 +220,9 @@ class VLAAppGUI:
 
         # Model Selector
         tk.Label(settings_card, text="Vision Model:", font=("Segoe UI", 10, "bold"), bg=self.card_bg, fg=self.text_color).grid(row=1, column=0, sticky="w", pady=8)
-        self.model_combo = ttk.Combobox(settings_card, values=["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"], width=25, state="readonly")
+        self.model_combo = ttk.Combobox(settings_card, values=["gemini-flash-latest", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-pro-latest"], width=25, state="readonly")
         self.model_combo.grid(row=1, column=1, sticky="w", padx=10, pady=8)
-        self.model_combo.set(config.get("gemini_model", "gemini-2.0-flash"))
+        self.model_combo.set(config.get("gemini_model", "gemini-flash-latest"))
 
         # Global Hotkey
         tk.Label(settings_card, text="Global Hotkey:", font=("Segoe UI", 10, "bold"), bg=self.card_bg, fg=self.text_color).grid(row=2, column=0, sticky="w", pady=8)

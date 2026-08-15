@@ -42,13 +42,13 @@ JSON_SCHEMA = {
 class VLAEngine:
     def __init__(self, api_key: Optional[str] = None, model_name: Optional[str] = None):
         self.api_key = api_key or config.get_api_key()
-        self.model_name = model_name or config.get("gemini_model", "gemini-2.0-flash")
+        self.model_name = model_name or config.get("gemini_model", "gemini-flash-latest")
         self.client = None
         self._init_client()
 
     def _init_client(self):
         self.api_key = config.get_api_key()
-        self.model_name = config.get("gemini_model", "gemini-2.0-flash")
+        self.model_name = config.get("gemini_model", "gemini-flash-latest")
         if not self.api_key:
             return
 
@@ -92,9 +92,10 @@ class VLAEngine:
         img_bytes = img_byte_arr.getvalue()
         prompt_text = "Extract the Object, Action, Goal, High-Level Caption (T1), and Suggested Segments from this task frame adhering strictly to VLA guidelines."
 
-        # Model trial order with auto-fallback
+        # Model trial order with verified active auto-fallbacks
         candidate_models = [self.model_name]
-        for fallback in ["gemini-2.0-flash", "gemini-1.5-flash"]:
+        verified_fallbacks = ["gemini-flash-latest", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]
+        for fallback in verified_fallbacks:
             if fallback not in candidate_models:
                 candidate_models.append(fallback)
 

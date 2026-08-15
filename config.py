@@ -10,7 +10,7 @@ CONFIG_FILE = Path(__file__).parent / "config.json"
 
 # Non-sensitive default preferences
 DEFAULT_CONFIG = {
-    "gemini_model": os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
+    "gemini_model": os.getenv("GEMINI_MODEL", "gemini-flash-latest"),
     "global_hotkey": os.getenv("GLOBAL_HOTKEY", "<alt>+<space>"),
     "auto_copy": os.getenv("AUTO_COPY_CLIPBOARD", "true").lower() == "true",
     "play_audio": os.getenv("PLAY_AUDIO_FEEDBACK", "true").lower() == "true",
