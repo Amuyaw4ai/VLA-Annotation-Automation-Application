@@ -17,9 +17,9 @@ class VLAAppGUI:
         self.is_locked = config.get("position_locked", False)
 
         if self.current_ui_mode == "mini":
-            self.root.minsize(350, 90)
-            self.root.maxsize(800, 200)
-            self.root.geometry("440x115")
+            self.root.minsize(260, 90)
+            self.root.maxsize(650, 160)
+            self.root.geometry("340x115")
         else:
             self.root.minsize(750, 580)
             self.root.geometry("850x680")
@@ -96,7 +96,7 @@ class VLAAppGUI:
         self.is_locked = not self.is_locked
         config.set("position_locked", self.is_locked)
         if hasattr(self, "lock_btn"):
-            self.lock_btn.config(text="🔒 Locked" if self.is_locked else "🔓 Unlocked")
+            self.lock_btn.config(text="🔒 Lock" if self.is_locked else "🔓 Lock")
 
     def toggle_ui_mode(self):
         new_mode = "mini" if self.current_ui_mode == "full" else "full"
@@ -108,9 +108,9 @@ class VLAAppGUI:
             widget.destroy()
 
         if new_mode == "mini":
-            self.root.minsize(350, 90)
-            self.root.maxsize(800, 180)
-            self.root.geometry("440x115")
+            self.root.minsize(260, 90)
+            self.root.maxsize(650, 160)
+            self.root.geometry("340x115")
             self.root.resizable(True, True)
             self.build_mini_ui()
         else:
@@ -121,27 +121,27 @@ class VLAAppGUI:
             self.build_ui()
 
     def build_mini_ui(self):
-        # Master Mini Frame (Sleek compact bar)
-        mini_master = tk.Frame(self.root, bg=self.card_bg, padx=4, pady=4)
+        # Master Mini Frame (Sleek compact 340x115 bar)
+        mini_master = tk.Frame(self.root, bg=self.card_bg, padx=3, pady=3)
         mini_master.pack(fill="both", expand=True)
 
-        # Column 1 (Left ~40%): Caption Text & Badges (Invisible Mouse-Wheel Scroll)
-        col1 = tk.Frame(mini_master, bg="#181825", padx=6, pady=4)
+        # Column 1 (Left): Compact Caption Text & Badges (Trimmed excess width)
+        col1 = tk.Frame(mini_master, bg="#181825", padx=4, pady=3, width=140)
         col1.pack(side="left", fill="both", expand=True, padx=(0, 2))
 
         header_sub = tk.Frame(col1, bg="#181825")
-        header_sub.pack(fill="x", pady=(0, 2))
+        header_sub.pack(fill="x", pady=(0, 1))
 
         cur_mode = self.mode_var.get() if hasattr(self, "mode_var") else config.get("annotation_mode", "high_level")
         mode_text = "T2 Detailed" if cur_mode == "detailed" else "T1 High-Level"
-        self.mini_mode_label = tk.Label(header_sub, text=mode_text, font=("Segoe UI", 8, "bold"), bg="#181825", fg=self.success_color)
+        self.mini_mode_label = tk.Label(header_sub, text=mode_text, font=("Segoe UI", 7, "bold"), bg="#181825", fg=self.success_color)
         self.mini_mode_label.pack(side="left")
 
-        self.mini_latency_label = tk.Label(header_sub, text="", font=("Segoe UI", 8), bg="#181825", fg="#9399b2")
+        self.mini_latency_label = tk.Label(header_sub, text="", font=("Segoe UI", 7), bg="#181825", fg="#9399b2")
         self.mini_latency_label.pack(side="right")
 
-        # Invisible-scroll text box
-        self.mini_caption_text = tk.Text(col1, height=3, font=("Segoe UI", 9), bg="#181825", fg=self.text_color, wrap="word", relief="flat", borderwidth=0)
+        # Invisible-scroll compact text box
+        self.mini_caption_text = tk.Text(col1, height=3, width=15, font=("Segoe UI", 8), bg="#181825", fg=self.text_color, wrap="word", relief="flat", borderwidth=0)
         self.mini_caption_text.pack(fill="both", expand=True)
 
         # Pre-fill active caption if available
