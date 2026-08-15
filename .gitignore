@@ -1,0 +1,26 @@
+# Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables & keys
+.env
+
+# Session history & logs
+history.json
+*.log
+
+# Large media & PDF documentation files local to workspace
+*.mp4
+*.pdf
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp

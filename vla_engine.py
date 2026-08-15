@@ -1,0 +1,133 @@
+import io
+import json
+import base64
+from PIL import Image
+from typing import Dict, Any, Optional
+from config import config
+from vla_validator import validator
+
+SYSTEM_INSTRUCTION = """
+You are an expert Visual-Language-Action (VLA) annotation assistant for industrial manipulation and video captioning tasks.
+
+Analyze the image frame representing a manual or automated task and extract structured annotation data:
+1. Object: The primary physical object(s) being manipulated (use plain, visible terms like 'metal bracket', 'plastic bottle', 'circuit board', 'drawer' - avoid overly technical names).
+2. Action: The primary physical action taking place (e.g., assembled, unscrewed, sorted, cleaned, placed, picked up).
+3. Goal: The end state or target location (e.g., 'into the tray', 'onto the base plate', 'on the shelf').
+4. High-Level Caption (T1): A 1-2 sentence concise summary describing what is happening in simple present or passive descriptive English following the formula "[Object] is [Action] [Goal]." or similar simple statement.
+5. Suggested Segments: An array of 2-4 discrete sub-action strings that represent discrete steps in this action frame sequence.
+
+CRITICAL GUIDELINE RULES:
+- Strictly DO NOT mention hands, arms, workers, operators, people, left hand, right hand, or human body parts.
+- Describe ONLY visible physical facts and actions. Do not assume intentions or unseen thoughts.
+- Use simple, clear, natural English in simple present or passive tense.
+- Output purely valid JSON matching the schema.
+"""
+
+JSON_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "object": {"type": "STRING"},
+        "action": {"type": "STRING"},
+        "goal": {"type": "STRING"},
+        "high_level_caption": {"type": "STRING"},
+        "suggested_segments": {
+            "type": "ARRAY",
+            "items": {"type": "STRING"}
+        }
+    },
+    "required": ["object", "action", "goal", "high_level_caption"]
+}
+
+class VLAEngine:
+    def __init__(self, api_key: Optional[str] = None, model_name: Optional[str] = None):
+        self.api_key = api_key or config.get("gemini_api_key", "")
+        self.model_name = model_name or config.get("gemini_model", "gemini-2.5-flash")
+        self.client = None
+        self._init_client()
+
+    def _init_client(self):
+        self.api_key = config.get("gemini_api_key", "")
+        self.model_name = config.get("gemini_model", "gemini-2.5-flash")
+        if not self.api_key:
+            return
+
+        try:
+            from google import genai
+            self.client = genai.Client(api_key=self.api_key)
+            self.sdk_type = "new"
+        except ImportError:
+            try:
+                import google.generativeai as genai_old
+                genai_old.configure(api_key=self.api_key)
+                self.client = genai_old
+                self.sdk_type = "legacy"
+            except Exception as e:
+                print(f"[VLAEngine] Error initializing Gemini SDK: {e}")
+                self.client = None
+
+    def analyze_image(self, image: Image.Image) -> Dict[str, Any]:
+        """
+        Analyzes a PIL Image frame using Gemini Vision API and returns structured OAG result.
+        """
+        if not self.api_key:
+            return {
+                "error": "Gemini API key not configured. Please enter your API key in Settings.",
+                "is_valid": False
+            }
+
+        if not self.client:
+            self._init_client()
+            if not self.client:
+                return {
+                    "error": "Failed to initialize Gemini client. Ensure google-genai package is installed.",
+                    "is_valid": False
+                }
+
+        try:
+            # Convert image to PNG bytes
+            img_byte_arr = io.BytesIO()
+            image.save(img_byte_arr, format='PNG')
+            img_bytes = img_byte_arr.getvalue()
+
+            prompt_text = "Extract the Object, Action, Goal, High-Level Caption (T1), and Suggested Segments from this task frame adhering strictly to VLA guidelines."
+
+            if self.sdk_type == "new":
+                from google.genai import types
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=[
+                        types.Part.from_bytes(data=img_bytes, mime_type="image/png"),
+                        prompt_text
+                    ],
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        response_mime_type="application/json",
+                        response_schema=JSON_SCHEMA,
+                        temperature=0.1
+                    )
+                )
+                response_text = response.text
+            else:
+                model = self.client.GenerativeModel(
+                    model_name=self.model_name,
+                    system_instruction=SYSTEM_INSTRUCTION
+                )
+                response = model.generate_content(
+                    [image, prompt_text],
+                    generation_config={"response_mime_type": "application/json"}
+                )
+                response_text = response.text
+
+            # Parse JSON
+            raw_data = json.loads(response_text)
+            processed = validator.process_oag_response(raw_data)
+            return processed
+
+        except Exception as e:
+            print(f"[VLAEngine] Inference error: {e}")
+            return {
+                "error": f"Inference failed: {str(e)}",
+                "is_valid": False
+            }
+
+engine = VLAEngine()

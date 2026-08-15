@@ -1,0 +1,152 @@
+import os
+import time
+import json
+import threading
+import winsound
+import pyperclip
+from PIL import ImageGrab, Image
+from pathlib import Path
+from typing import Callable, Optional, Dict, Any, List
+
+from config import config
+from vla_engine import engine
+
+HISTORY_FILE = Path(__file__).parent / "history.json"
+
+class ClipboardListener:
+    def __init__(self, callback: Optional[Callable[[Dict[str, Any]], None]] = None):
+        self.callback = callback
+        self.listener = None
+        self.is_running = False
+        self.history: List[Dict[str, Any]] = self._load_history()
+        self._lock = threading.Lock()
+
+    def _load_history(self) -> List[Dict[str, Any]]:
+        if HISTORY_FILE.exists():
+            try:
+                with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"[ClipboardListener] Error loading history: {e}")
+        return []
+
+    def _save_history(self):
+        try:
+            limit = config.get("history_limit", 50)
+            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.history[:limit], f, indent=2)
+        except Exception as e:
+            print(f"[ClipboardListener] Error saving history: {e}")
+
+    def add_to_history(self, item: Dict[str, Any]):
+        with self._lock:
+            self.history.insert(0, item)
+            limit = config.get("history_limit", 50)
+            self.history = self.history[:limit]
+            self._save_history()
+
+    def play_feedback_sound(self, success: bool = True):
+        if not config.get("play_audio", True):
+            return
+        try:
+            if success:
+                # Upbeat short chime for success
+                winsound.Beep(1200, 100)
+                winsound.Beep(1800, 120)
+            else:
+                # Low beep for failure
+                winsound.Beep(400, 250)
+        except Exception:
+            pass
+
+    def process_clipboard_frame(self) -> Dict[str, Any]:
+        """
+        Grabs image from clipboard, sends to Gemini VLA engine, copies result to clipboard.
+        """
+        print("[ClipboardListener] Hotkey triggered! Reading clipboard buffer...")
+        img = None
+
+        try:
+            img = ImageGrab.grabclipboard()
+        except Exception as e:
+            print(f"[ClipboardListener] Error grabbing clipboard: {e}")
+
+        if img is None or not isinstance(img, Image.Image):
+            res = {
+                "error": "No image found in clipboard! Use Win + Shift + S to take a screenshot first.",
+                "is_valid": False,
+                "timestamp": time.strftime("%H:%M:%S")
+            }
+            self.play_feedback_sound(success=False)
+            if self.callback:
+                self.callback(res)
+            return res
+
+        # Convert to RGB if necessary
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+
+        # Process frame with Gemini VLA engine
+        start_time = time.time()
+        result = engine.analyze_image(img)
+        elapsed = round(time.time() - start_time, 2)
+        result["latency_seconds"] = elapsed
+        result["timestamp"] = time.strftime("%H:%M:%S")
+
+        # Auto-copy High-Level Caption to system clipboard if successful
+        if result.get("is_valid") and result.get("high_level_caption"):
+            caption = result["high_level_caption"]
+            if config.get("auto_copy", True):
+                try:
+                    pyperclip.copy(caption)
+                    print(f"[ClipboardListener] Caption copied to clipboard in {elapsed}s: '{caption}'")
+                except Exception as e:
+                    print(f"[ClipboardListener] Pyperclip copy error: {e}")
+
+            self.play_feedback_sound(success=True)
+        else:
+            self.play_feedback_sound(success=False)
+
+        # Save to history log
+        self.add_to_history(result)
+
+        # Trigger callback for GUI update
+        if self.callback:
+            self.callback(result)
+
+        return result
+
+    def _on_hotkey(self):
+        # Run processing in background thread to prevent UI or hotkey thread freezing
+        threading.Thread(target=self.process_clipboard_frame, daemon=True).start()
+
+    def start(self):
+        if self.is_running:
+            return
+
+        try:
+            from pynput import keyboard
+            hotkey_str = config.get("global_hotkey", "<alt>+<space>")
+            print(f"[ClipboardListener] Starting hotkey listener bound to {hotkey_str}")
+
+            hotkeys_dict = {
+                hotkey_str: self._on_hotkey
+            }
+
+            self.listener = keyboard.GlobalHotKeys(hotkeys_dict)
+            self.listener.start()
+            self.is_running = True
+        except Exception as e:
+            print(f"[ClipboardListener] Failed to start global hotkey listener: {e}")
+            self.is_running = False
+
+    def stop(self):
+        if self.listener and self.is_running:
+            try:
+                self.listener.stop()
+            except Exception:
+                pass
+            self.is_running = False
+            print("[ClipboardListener] Hotkey listener stopped.")
+
+clipboard_service = ClipboardListener()
