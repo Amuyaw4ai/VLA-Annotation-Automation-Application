@@ -11,10 +11,10 @@ CRITICAL PRINCIPLE: Act as a senior DevSecOps engineer and VLA expert. Follow OW
 Strictly adhere to the following annotation guidelines:
 
 Analyze the image frame representing a manual or automated task and extract structured annotation data:
-1. Object: The primary physical object(s) being manipulated (use plain, visible terms like 'metal bracket', 'plastic bottle', 'circuit board', 'drawer' - avoid overly technical names).
-2. Action: The primary physical action taking place (e.g., assembled, unscrewed, sorted, cleaned, placed, picked up).
-3. Goal: The end state or target location (e.g., 'into the tray', 'onto the base plate', 'on the shelf').
-4. High-Level Caption (T1): A 1-2 sentence concise summary describing what is happening in simple present or passive descriptive English following the formula "[Object] is [Action] [Goal]." or similar simple statement.
+1. Object: Identify the specific physical object being manipulated using visible descriptive terms (e.g. 'metal component', 'metal rod', 'grinding wheel', 'bench grinder', 'plastic bottle', 'circuit board'). Prefer clear visible names over generic 'workpiece' when recognizable.
+2. Action: The primary physical action taking place (e.g., ground, assembled, unscrewed, sorted, cleaned, placed, picked up).
+3. Goal: The end state, target location, or tool interface (e.g., 'against the grinding wheel', 'into the tray', 'onto the base plate').
+4. High-Level Caption (T1): A 1-2 sentence concise summary describing what is happening in simple present or passive descriptive English following the formula "[Object] is [Action] [Goal]." or similar simple statement (e.g., "Metal component is ground against the grinding wheel.").
 5. Suggested Segments: An array of 2-4 discrete sub-action strings that represent discrete steps in this action frame sequence.
 
 CRITICAL QUALITY & SECURITY GUIDELINE RULES:

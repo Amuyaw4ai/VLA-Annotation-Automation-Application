@@ -133,10 +133,10 @@ class ClipboardListener:
     def _clipboard_poller_loop(self):
         """
         Autonomous Mode: Continuously polls clipboard for new screenshots.
-        Only triggers when auto_detect_clipboard is True and a new image appears.
+        Triggers automatically when a new screenshot image is detected.
         """
         while not self._stop_poller.is_set():
-            time.sleep(0.4)
+            time.sleep(0.3)
             if not config.get("auto_detect_clipboard", False):
                 continue
 
@@ -146,13 +146,13 @@ class ClipboardListener:
                     if img.mode != "RGB":
                         img = img.convert("RGB")
                     img_hash = self._compute_image_hash(img)
-                    if self.last_img_hash is None:
-                        # Initialize hash without auto-triggering existing clipboard content on boot
-                        self.last_img_hash = img_hash
-                    elif img_hash != self.last_img_hash:
+                    if self.last_img_hash is None or img_hash != self.last_img_hash:
                         print("[ClipboardListener Autonomous] New screenshot detected! Auto-processing...")
                         self.last_img_hash = img_hash
                         self.process_clipboard_frame()
+                else:
+                    # Clipboard holds text or non-image; reset hash for immediate next snip detection
+                    self.last_img_hash = None
             except Exception:
                 pass
 
