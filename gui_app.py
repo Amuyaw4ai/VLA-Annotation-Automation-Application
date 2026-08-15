@@ -391,6 +391,11 @@ class VLAAppGUI:
         config.set("annotation_mode", new_mode)
         self._update_caption_title()
 
+        # Task 2: Reprocess or retrieve cached caption for active image in memory
+        if clipboard_service.active_image is not None:
+            import threading
+            threading.Thread(target=clipboard_service.reprocess_active_image, args=(new_mode,), daemon=True).start()
+
     def trigger_manual_snip(self):
         self.status_var.set(f"Processing clipboard image ({self.mode_var.get().upper()} mode)...")
         self.root.update_idletasks()

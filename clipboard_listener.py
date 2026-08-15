@@ -22,6 +22,8 @@ class ClipboardListener:
         self.history: List[Dict[str, Any]] = self._load_history()
         self._lock = threading.Lock()
         self.last_img_hash = None
+        self.active_image: Optional[Image.Image] = None
+        self.active_captions: Dict[str, Dict[str, Any]] = {}
         self._poller_thread = None
         self._stop_poller = threading.Event()
 
@@ -67,21 +69,35 @@ class ClipboardListener:
         except Exception:
             return str(time.time())
 
-    def process_clipboard_frame(self) -> Dict[str, Any]:
+    def reprocess_active_image(self, target_mode: str) -> Optional[Dict[str, Any]]:
         """
-        Grabs image from clipboard, sends to Gemini VLA engine, copies result to clipboard.
+        Task 2 Feature: Switches mode and re-processes/retrieves caption for the active image in memory without re-snipping.
         """
-        print("[ClipboardListener] Processing clipboard frame...")
-        img = None
+        if self.active_image is None:
+            return None
+        return self.process_clipboard_frame(override_img=self.active_image, mode=target_mode)
 
-        try:
-            img = ImageGrab.grabclipboard()
-        except Exception as e:
-            print(f"[ClipboardListener] Error grabbing clipboard: {e}")
+    def process_clipboard_frame(self, override_img: Optional[Image.Image] = None, mode: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Task 2 Dual-Caption Single-Snip Memory Cache:
+        Grabs image from clipboard/memory, caches captions per mode, and avoids double-snipping.
+        """
+        current_mode = mode or config.get("annotation_mode", "high_level")
+        img = override_img
+
+        if img is None:
+            try:
+                img = ImageGrab.grabclipboard()
+            except Exception as e:
+                print(f"[ClipboardListener] Error grabbing clipboard: {e}")
+
+        if img is None or not isinstance(img, Image.Image):
+            # Fall back to active image in memory if available
+            img = self.active_image
 
         if img is None or not isinstance(img, Image.Image):
             res = {
-                "error": "No image found in clipboard! Use Win + Shift + S to take a screenshot first.",
+                "error": "No image found in clipboard or memory! Use Win + Shift + S to take a screenshot first.",
                 "is_valid": False,
                 "timestamp": time.strftime("%H:%M:%S")
             }
@@ -94,23 +110,47 @@ class ClipboardListener:
         if img.mode != "RGB":
             img = img.convert("RGB")
 
-        # Update last image hash
-        self.last_img_hash = self._compute_image_hash(img)
+        new_hash = self._compute_image_hash(img)
 
-        # Process frame with Gemini VLA engine
+        # If a NEW screenshot is taken (hash differs), clear memory cache
+        if self.last_img_hash != new_hash:
+            self.last_img_hash = new_hash
+            self.active_image = img
+            self.active_captions = {}
+
+        # Instant Cache Check for current mode
+        if current_mode in self.active_captions:
+            cached_result = self.active_captions[current_mode]
+            print(f"[ClipboardListener Memory Cache] Instant cache hit for mode '{current_mode}' (0.0s latency)!")
+            if cached_result.get("is_valid") and cached_result.get("high_level_caption"):
+                if config.get("auto_copy", True):
+                    try:
+                        pyperclip.copy(cached_result["high_level_caption"])
+                    except Exception:
+                        pass
+                self.play_feedback_sound(success=True)
+
+            if self.callback:
+                self.callback(cached_result)
+            return cached_result
+
+        # Process frame with Gemini VLA engine under current_mode
         start_time = time.time()
-        result = engine.analyze_image(img)
+        result = engine.analyze_image(img, mode=current_mode)
         elapsed = round(time.time() - start_time, 2)
         result["latency_seconds"] = elapsed
         result["timestamp"] = time.strftime("%H:%M:%S")
 
-        # Auto-copy High-Level Caption to system clipboard if successful
+        # Cache result in memory for instant mode toggling
+        self.active_captions[current_mode] = result
+
+        # Auto-copy caption to system clipboard if successful
         if result.get("is_valid") and result.get("high_level_caption"):
             caption = result["high_level_caption"]
             if config.get("auto_copy", True):
                 try:
                     pyperclip.copy(caption)
-                    print(f"[ClipboardListener] Caption copied to clipboard in {elapsed}s: '{caption}'")
+                    print(f"[ClipboardListener] Caption ({current_mode}) copied in {elapsed}s: '{caption}'")
                 except Exception as e:
                     print(f"[ClipboardListener] Pyperclip copy error: {e}")
 
