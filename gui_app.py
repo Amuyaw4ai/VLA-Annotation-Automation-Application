@@ -15,6 +15,7 @@ class VLAAppGUI:
         self.current_ui_mode = config.get("ui_mode", "full")
         self.is_pinned = config.get("pinned_top", True)
         self.is_locked = config.get("position_locked", False)
+        self.mode_var = tk.StringVar(value=config.get("annotation_mode", "high_level"))
 
         if self.current_ui_mode == "mini":
             self.root.minsize(260, 90)
@@ -433,12 +434,14 @@ class VLAAppGUI:
     def on_mode_changed(self):
         new_mode = self.mode_var.get()
         config.set("annotation_mode", new_mode)
-        self._update_caption_title()
+        if hasattr(self, "caption_title_var"):
+            self._update_caption_title()
 
-        # Task 2: Reprocess or retrieve cached caption for active image in memory
+        # Reprocess or retrieve pre-fetched cached caption for active image in memory
         if clipboard_service.active_image is not None:
-            import threading
-            threading.Thread(target=clipboard_service.reprocess_active_image, args=(new_mode,), daemon=True).start()
+            res = clipboard_service.reprocess_active_image(new_mode)
+            if res:
+                self._update_ui_with_result(res)
 
     def trigger_manual_snip(self):
         self.status_var.set(f"Processing clipboard image ({self.mode_var.get().upper()} mode)...")

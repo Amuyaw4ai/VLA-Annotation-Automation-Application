@@ -147,15 +147,28 @@ class ClipboardListener:
                 self.callback(cached_result)
             return cached_result
 
-        # Process frame with Gemini VLA engine under current_mode
+        # Parallel Dual-Mode Pre-Fetching: Run both T1 High-Level and T2 Detailed models simultaneously
+        print(f"[ClipboardListener Parallel] Launching parallel Gemini Vision inference for T1 (High-Level) and T2 (Detailed)...")
         start_time = time.time()
-        result = engine.analyze_image(img, mode=current_mode)
-        elapsed = round(time.time() - start_time, 2)
-        result["latency_seconds"] = elapsed
-        result["timestamp"] = time.strftime("%H:%M:%S")
+        from concurrent.futures import ThreadPoolExecutor
 
-        # Cache result in memory for instant mode toggling
-        self.active_captions[current_mode] = result
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            future_hl = executor.submit(engine.analyze_image, img, "high_level")
+            future_dt = executor.submit(engine.analyze_image, img, "detailed")
+            res_hl = future_hl.result()
+            res_dt = future_dt.result()
+
+        elapsed = round(time.time() - start_time, 2)
+        res_hl["latency_seconds"] = elapsed
+        res_hl["timestamp"] = time.strftime("%H:%M:%S")
+        res_dt["latency_seconds"] = elapsed
+        res_dt["timestamp"] = time.strftime("%H:%M:%S")
+
+        # Cache both results in memory for instant 0.0s mode toggling
+        self.active_captions["high_level"] = res_hl
+        self.active_captions["detailed"] = res_dt
+
+        result = self.active_captions.get(current_mode, res_hl)
 
         # Auto-copy caption to system clipboard if successful
         if result.get("is_valid") and result.get("high_level_caption"):
