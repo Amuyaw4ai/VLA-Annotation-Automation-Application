@@ -6,14 +6,15 @@ A high-performance automation suite designed for **Annotasks** to reduce video c
 
 ## 🚀 Key Features
 
-* **Global Hotkey Snip-and-Process (`Alt + Space`)**: Trigger image processing from anywhere on your desktop without switching away from Annotasks.
+* **Global Hotkey Trigger (`Ctrl + Space`)**: Trigger caption generation from anywhere on your desktop without conflicting with PowerToys (`Alt + Space`).
+* **Autonomous Auto-Snip Mode**: Option to auto-detect new screenshots immediately upon taking a snip (`Win + Shift + S`) without needing any hotkey trigger.
+* **Manual / On-Demand Protection**: Keep Autonomous Mode disabled to process only when `Ctrl + Space` is pressed, saving API costs on unrelated screenshots.
 * **Direct System Clipboard Reading**: Reads image bytes directly from Windows Clipboard (`Win + Shift + S`) with zero file-system latency.
-* **Gemini 2.5 / 2.0 Flash Vision Engine**: Structured JSON schema output powered by Google GenAI.
+* **Gemini Vision Engine (`gemini-flash-latest`)**: Structured JSON schema output powered by Google GenAI.
 * **Strict Quality Guardrails & Auto-Sanitization**: Automatically detects and strips forbidden words (`operator`, `worker`, `person`, `left hand`, `right hand`, `arms`, `robotic arms`) and verifies simple present tense.
 * **Instant Clipboard Auto-Copy**: Automatically copies sanitized High-Level Captions to system clipboard for immediate `Ctrl + V` pasting into Annotasks.
-* **Audio Feedback & Toast**: Subtile audio chime confirms successful caption generation and clipboard sync.
+* **Audio Feedback & Toast**: Subtle audio chime confirms successful caption generation and clipboard sync.
 * **Modern Desktop GUI & History Log**: Real-time preview dashboard, OAG breakdown cards, rule status indicators, and searchable session logs.
-* **Headless Background Mode**: Option to run as a lightweight headless CLI process in the background.
 
 ---
 
@@ -30,13 +31,14 @@ Open PowerShell or Command Prompt in the repository folder:
 pip install -r requirements.txt
 ```
 
-### 3. Configure API Key
+### 3. Configure API Key & Mode
 Create a `.env` file from `.env.example` or enter your API key directly in the Desktop GUI Settings tab:
 
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
-GLOBAL_HOTKEY=<alt>+<space>
+GEMINI_MODEL=gemini-flash-latest
+GLOBAL_HOTKEY=<ctrl>+<space>
+AUTO_DETECT_CLIPBOARD=false
 AUTO_COPY_CLIPBOARD=true
 PLAY_AUDIO_FEEDBACK=true
 ```
@@ -54,7 +56,7 @@ PLAY_AUDIO_FEEDBACK=true
 3. **Annotate at High Speed**:
    * **Step 1:** Preview the video at 8x (`Shift + Up Arrow`).
    * **Step 2:** Snip a video frame: press `Win + Shift + S` and drag over the workspace/object.
-   * **Step 3:** Press `Alt + Space` anywhere on your desktop.
+   * **Step 3:** Press `Ctrl + Space` anywhere on desktop (or enable Autonomous Auto-Snip in Settings).
    * **Step 4:** Listen for the success chime (~1.2s latency). High-Level Caption is automatically copied to your clipboard!
    * **Step 5:** Press `Ctrl + V` into Annotasks and proceed with timeline segmentation (`C` shortcut).
 
@@ -65,7 +67,7 @@ PLAY_AUDIO_FEEDBACK=true
 | Shortcut | Context | Action / Function |
 | :--- | :--- | :--- |
 | **`Win + Shift + S`** | Windows | Take screenshot snip of video frame |
-| **`Alt + Space`** | Global | Process clipboard frame & auto-copy VLA caption |
+| **`Ctrl + Space`** | Global | Process clipboard frame & auto-copy VLA caption |
 | **`Ctrl + V`** | Annotasks | Paste High-Level Caption into task |
 | **`Shift + Up Arrow`** | Annotasks | Fast preview video at 8x speed |
 | **`Shift + Down Arrow`** | Annotasks | Slow down video to 2x speed for segmenting |

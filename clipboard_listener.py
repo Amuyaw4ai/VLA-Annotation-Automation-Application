@@ -1,6 +1,7 @@
 import os
 import time
 import json
+import hashlib
 import threading
 import winsound
 import pyperclip
@@ -20,6 +21,9 @@ class ClipboardListener:
         self.is_running = False
         self.history: List[Dict[str, Any]] = self._load_history()
         self._lock = threading.Lock()
+        self.last_img_hash = None
+        self._poller_thread = None
+        self._stop_poller = threading.Event()
 
     def _load_history(self) -> List[Dict[str, Any]]:
         if HISTORY_FILE.exists():
@@ -50,20 +54,24 @@ class ClipboardListener:
             return
         try:
             if success:
-                # Upbeat short chime for success
                 winsound.Beep(1200, 100)
                 winsound.Beep(1800, 120)
             else:
-                # Low beep for failure
                 winsound.Beep(400, 250)
         except Exception:
             pass
+
+    def _compute_image_hash(self, img: Image.Image) -> str:
+        try:
+            return hashlib.md5(img.tobytes()).hexdigest()
+        except Exception:
+            return str(time.time())
 
     def process_clipboard_frame(self) -> Dict[str, Any]:
         """
         Grabs image from clipboard, sends to Gemini VLA engine, copies result to clipboard.
         """
-        print("[ClipboardListener] Hotkey triggered! Reading clipboard buffer...")
+        print("[ClipboardListener] Processing clipboard frame...")
         img = None
 
         try:
@@ -85,6 +93,9 @@ class ClipboardListener:
         # Convert to RGB if necessary
         if img.mode != "RGB":
             img = img.convert("RGB")
+
+        # Update last image hash
+        self.last_img_hash = self._compute_image_hash(img)
 
         # Process frame with Gemini VLA engine
         start_time = time.time()
@@ -117,8 +128,33 @@ class ClipboardListener:
         return result
 
     def _on_hotkey(self):
-        # Run processing in background thread to prevent UI or hotkey thread freezing
         threading.Thread(target=self.process_clipboard_frame, daemon=True).start()
+
+    def _clipboard_poller_loop(self):
+        """
+        Autonomous Mode: Continuously polls clipboard for new screenshots.
+        Only triggers when auto_detect_clipboard is True and a new image appears.
+        """
+        while not self._stop_poller.is_set():
+            time.sleep(0.4)
+            if not config.get("auto_detect_clipboard", False):
+                continue
+
+            try:
+                img = ImageGrab.grabclipboard()
+                if img and isinstance(img, Image.Image):
+                    if img.mode != "RGB":
+                        img = img.convert("RGB")
+                    img_hash = self._compute_image_hash(img)
+                    if self.last_img_hash is None:
+                        # Initialize hash without auto-triggering existing clipboard content on boot
+                        self.last_img_hash = img_hash
+                    elif img_hash != self.last_img_hash:
+                        print("[ClipboardListener Autonomous] New screenshot detected! Auto-processing...")
+                        self.last_img_hash = img_hash
+                        self.process_clipboard_frame()
+            except Exception:
+                pass
 
     def start(self):
         if self.is_running:
@@ -126,8 +162,8 @@ class ClipboardListener:
 
         try:
             from pynput import keyboard
-            hotkey_str = config.get("global_hotkey", "<alt>+<space>")
-            print(f"[ClipboardListener] Starting hotkey listener bound to {hotkey_str}")
+            hotkey_str = config.get("global_hotkey", "<ctrl>+<space>")
+            print(f"[ClipboardListener] Starting listener bound to hotkey {hotkey_str}")
 
             hotkeys_dict = {
                 hotkey_str: self._on_hotkey
@@ -136,17 +172,24 @@ class ClipboardListener:
             self.listener = keyboard.GlobalHotKeys(hotkeys_dict)
             self.listener.start()
             self.is_running = True
+
+            # Start autonomous clipboard poller
+            self._stop_poller.clear()
+            self._poller_thread = threading.Thread(target=self._clipboard_poller_loop, daemon=True)
+            self._poller_thread.start()
+
         except Exception as e:
-            print(f"[ClipboardListener] Failed to start global hotkey listener: {e}")
+            print(f"[ClipboardListener] Failed to start global listener: {e}")
             self.is_running = False
 
     def stop(self):
+        self._stop_poller.set()
         if self.listener and self.is_running:
             try:
                 self.listener.stop()
             except Exception:
                 pass
             self.is_running = False
-            print("[ClipboardListener] Hotkey listener stopped.")
+            print("[ClipboardListener] Listener stopped.")
 
 clipboard_service = ClipboardListener()

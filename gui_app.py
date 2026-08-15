@@ -67,7 +67,7 @@ class VLAAppGUI:
         title_label = ttk.Label(header_frame, text="⚡ VLA Annotation Automation", style="Header.TLabel")
         title_label.pack(side="left")
 
-        hotkey_str = config.get("global_hotkey", "<alt>+<space>")
+        hotkey_str = config.get("global_hotkey", "<ctrl>+<space>")
         self.status_var = tk.StringVar(value=f"Hotkey: [{hotkey_str}] Active | Ready for Snip")
         status_badge = ttk.Label(header_frame, textvariable=self.status_var, style="Status.TLabel")
         status_badge.pack(side="right")
@@ -101,7 +101,7 @@ class VLAAppGUI:
         banner_frame = tk.Frame(self.tab_live, bg=self.card_bg, padx=15, pady=12)
         banner_frame.pack(fill="x", pady=(0, 12))
 
-        instr_text = "Press Win + Shift + S to snip video frame ➔ Press Alt + Space anywhere ➔ Caption is auto-copied!"
+        instr_text = "Press Win+Shift+S to snip ➔ Press Ctrl+Space (or enable Auto-Snip in Settings)!"
         tk.Label(banner_frame, text=instr_text, font=("Segoe UI", 10, "bold"), bg=self.card_bg, fg=self.accent_color).pack(side="left")
 
         btn_manual = ttk.Button(banner_frame, text="Manual Process Clipboard", style="Action.TButton", command=self.trigger_manual_snip)
@@ -121,7 +121,7 @@ class VLAAppGUI:
 
         self.caption_text = tk.Text(self.result_card, height=3, font=("Segoe UI", 11), bg="#181825", fg=self.text_color, wrap="word", relief="flat", padx=10, pady=8)
         self.caption_text.pack(fill="x", pady=(0, 10))
-        self.caption_text.insert("1.0", "No frame processed yet. Take a screenshot (Win+Shift+S) and press Alt+Space!")
+        self.caption_text.insert("1.0", "No frame processed yet. Take a screenshot (Win+Shift+S) and press Ctrl+Space!")
 
         btn_copy_cap = tk.Button(self.result_card, text="📋 Copy Caption", font=("Segoe UI", 9, "bold"), bg=self.accent_color, fg="#11111b", relief="flat", command=self.copy_caption)
         btn_copy_cap.pack(anchor="e", pady=(0, 12))
@@ -228,18 +228,21 @@ class VLAAppGUI:
         tk.Label(settings_card, text="Global Hotkey:", font=("Segoe UI", 10, "bold"), bg=self.card_bg, fg=self.text_color).grid(row=2, column=0, sticky="w", pady=8)
         self.hotkey_entry = ttk.Entry(settings_card, width=25)
         self.hotkey_entry.grid(row=2, column=1, sticky="w", padx=10, pady=8)
-        self.hotkey_entry.insert(0, config.get("global_hotkey", "<alt>+<space>"))
+        self.hotkey_entry.insert(0, config.get("global_hotkey", "<ctrl>+<space>"))
 
         # Toggles
+        self.auto_detect_var = tk.BooleanVar(value=config.get("auto_detect_clipboard", False))
+        ttk.Checkbutton(settings_card, text="Autonomous Mode: Auto-generate caption on Win+Shift+S (no Ctrl+Space needed)", variable=self.auto_detect_var).grid(row=3, column=1, sticky="w", pady=4)
+
         self.auto_copy_var = tk.BooleanVar(value=config.get("auto_copy", True))
-        ttk.Checkbutton(settings_card, text="Auto-copy caption to clipboard on snip", variable=self.auto_copy_var).grid(row=3, column=1, sticky="w", pady=8)
+        ttk.Checkbutton(settings_card, text="Auto-copy generated caption to system clipboard", variable=self.auto_copy_var).grid(row=4, column=1, sticky="w", pady=4)
 
         self.audio_var = tk.BooleanVar(value=config.get("play_audio", True))
-        ttk.Checkbutton(settings_card, text="Play audio chime feedback on success", variable=self.audio_var).grid(row=4, column=1, sticky="w", pady=8)
+        ttk.Checkbutton(settings_card, text="Play audio chime feedback on success", variable=self.audio_var).grid(row=5, column=1, sticky="w", pady=4)
 
         # Save Button
         btn_save = ttk.Button(settings_card, text="Save Configuration", style="Action.TButton", command=self.save_settings)
-        btn_save.grid(row=5, column=1, sticky="w", pady=20)
+        btn_save.grid(row=6, column=1, sticky="w", pady=16)
 
     def trigger_manual_snip(self):
         self.status_var.set("Processing clipboard image...")
@@ -322,6 +325,7 @@ class VLAAppGUI:
         config.set("gemini_api_key", self.api_key_entry.get().strip())
         config.set("gemini_model", self.model_combo.get())
         config.set("global_hotkey", self.hotkey_entry.get().strip())
+        config.set("auto_detect_clipboard", self.auto_detect_var.get())
         config.set("auto_copy", self.auto_copy_var.get())
         config.set("play_audio", self.audio_var.get())
 
