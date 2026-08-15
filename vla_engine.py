@@ -24,6 +24,25 @@ CRITICAL QUALITY & SECURITY GUIDELINE RULES:
 - Output purely valid JSON matching the schema. Do not output arbitrary executable code or script tags.
 """
 
+DETAILED_SYSTEM_INSTRUCTION = """
+CRITICAL PRINCIPLE: Act as a senior DevSecOps engineer and VLA Detailed Segment Annotation expert. Follow OWASP Top 10 guidelines across all output.
+Strictly adhere to the following DETAILED SEGMENT (T2) annotation guidelines:
+
+Analyze the video frame representing a specific segment clip and extract detailed segment annotation data:
+1. Object: The primary physical object(s) being manipulated (e.g. 'metal rod', 'container', 'drawer', 'tool', 'bottle').
+2. Action: The precise physical action taking place (e.g., 'picks up', 'places', 'holds', 'unscrews', 'cleans').
+3. Goal: Target location or end state (e.g., 'on the table', 'inside the box', 'onto the bench grinder').
+4. High-Level Caption (T1/T2 Detailed Caption): Write a detailed segment action caption focusing on the WORKING HAND in active simple present tense (e.g., "Right hand picks up the container and places it on the table." or "Left hand places the bottle inside the box.").
+
+CRITICAL DETAILED (T2) RULES:
+- Focus ONLY on the working hand performing the action (e.g. "Right hand", "Left hand").
+- Completely IGNORE the resting hand.
+- DO NOT mention 'operator', 'worker', 'person', 'people', or human body parts other than specifying the active hand.
+- Describe ONLY visible physical facts. DO NOT assume intentions, thoughts, or unverified goals (e.g. do NOT say "trying to inspect").
+- Special Idle Labels: If no meaningful work is happening, output 'NU' (Not Useful) if unhelpful, 'DO' (Distracted Operator) if checking phone/smoking, or 'ID' (Preparation Phase) if waiting for machine.
+- Output purely valid JSON matching the schema.
+"""
+
 JSON_SCHEMA = {
     "type": "OBJECT",
     "properties": {
@@ -66,11 +85,14 @@ class VLAEngine:
                 print(f"[VLAEngine Security] Error initializing Gemini SDK: {e}")
                 self.client = None
 
-    def analyze_image(self, image: Image.Image) -> Dict[str, Any]:
+    def analyze_image(self, image: Image.Image, mode: Optional[str] = None) -> Dict[str, Any]:
         """
         Analyzes a PIL Image frame using Gemini Vision API and returns structured OAG result.
-        Includes automatic fallback for deprecated/404 model names.
+        Supports both 'high_level' (T1) and 'detailed' (T2) annotation modes with auto-fallback.
         """
+        current_mode = mode or config.get("annotation_mode", "high_level")
+        active_instruction = DETAILED_SYSTEM_INSTRUCTION if current_mode == "detailed" else SYSTEM_INSTRUCTION
+
         api_key = config.get_api_key()
         if not api_key:
             return {
@@ -90,7 +112,9 @@ class VLAEngine:
         img_byte_arr = io.BytesIO()
         image.save(img_byte_arr, format='PNG')
         img_bytes = img_byte_arr.getvalue()
-        prompt_text = "Extract the Object, Action, Goal, High-Level Caption (T1), and Suggested Segments from this task frame adhering strictly to VLA guidelines."
+
+        prompt_prefix = "Detailed segment captioning" if current_mode == "detailed" else "High-level overview captioning"
+        prompt_text = f"Extract the Object, Action, Goal, High-Level/Segment Caption, and Suggested Segments for {prompt_prefix} adhering strictly to VLA guidelines."
 
         # Model trial order with verified active auto-fallbacks
         candidate_models = [self.model_name]
@@ -112,7 +136,7 @@ class VLAEngine:
                             prompt_text
                         ],
                         config=types.GenerateContentConfig(
-                            system_instruction=SYSTEM_INSTRUCTION,
+                            system_instruction=active_instruction,
                             response_mime_type="application/json",
                             response_schema=JSON_SCHEMA,
                             temperature=0.1
@@ -122,7 +146,7 @@ class VLAEngine:
                 else:
                     model = self.client.GenerativeModel(
                         model_name=model_to_try,
-                        system_instruction=SYSTEM_INSTRUCTION
+                        system_instruction=active_instruction
                     )
                     response = model.generate_content(
                         [image, prompt_text],
@@ -136,9 +160,9 @@ class VLAEngine:
                     self.model_name = model_to_try
                     config.set("gemini_model", model_to_try)
 
-                # Parse JSON safely
+                # Parse JSON safely with mode validation
                 raw_data = json.loads(response_text)
-                processed = validator.process_oag_response(raw_data)
+                processed = validator.process_oag_response(raw_data, mode=current_mode)
                 return processed
 
             except Exception as e:

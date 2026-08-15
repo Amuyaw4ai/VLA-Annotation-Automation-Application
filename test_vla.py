@@ -53,5 +53,17 @@ class TestVLASecurityAndGuidelines(unittest.TestCase):
                 self.assertNotIn("gemini_api_key", saved_disk_data)
                 self.assertNotIn(test_key, json.dumps(saved_disk_data))
 
+    def test_detailed_mode_rules(self):
+        # In detailed mode (T2), specifying the working hand is required/valid
+        detailed_good = "Right hand picks up the container and places it on the table."
+        is_valid, violations = validator.validate_caption(detailed_good, mode="detailed")
+        self.assertTrue(is_valid)
+
+        # In detailed mode (T2), mentioning operator is STILL strictly forbidden
+        detailed_bad = "The operator uses the right hand to pick up the container."
+        is_valid, violations = validator.validate_caption(detailed_bad, mode="detailed")
+        self.assertFalse(is_valid)
+        self.assertTrue(any("operator" in v for v in violations))
+
 if __name__ == "__main__":
     unittest.main()

@@ -25,29 +25,39 @@ class VLAValidator:
         escaped = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', escaped)
         return escaped
 
-    def validate_caption(self, caption: str) -> Tuple[bool, List[str]]:
+    def validate_caption(self, caption: str, mode: str = "high_level") -> Tuple[bool, List[str]]:
         """
-        Validates high-level caption against client guidelines.
+        Validates caption against client guidelines for T1 High-Level vs T2 Detailed mode.
         Returns (is_valid, list_of_violations).
         """
         violations = []
         caption_lower = caption.lower()
 
-        # Rule 1: Check for forbidden operator/body part words
-        for word in self.forbidden_words:
-            pattern = r'\b' + re.escape(word.lower()) + r'\b'
-            if re.search(pattern, caption_lower):
-                violations.append(f"Forbidden term detected: '{word}'")
-
-        # Rule 2: Check for potential script injection or suspicious tags
+        # Check for potential script injection or suspicious tags
         if re.search(r'<script|javascript:|data:', caption_lower):
             violations.append("Security Violation: Malicious script/URI pattern detected in output.")
 
-        # Rule 3: Ensure caption length is appropriate (usually 1-2 sentences, <= 300 chars)
+        if mode == "detailed":
+            # Detailed T2 Mode Rules:
+            # Must NOT mention operator, worker, person, or assumed intentions ("trying to")
+            operator_words = ["operator", "worker", "person", "people", "human", "someone", "trying to"]
+            for word in operator_words:
+                pattern = r'\b' + re.escape(word.lower()) + r'\b'
+                if re.search(pattern, caption_lower):
+                    violations.append(f"Forbidden term detected in detailed mode: '{word}'")
+        else:
+            # High-Level T1 Mode Rules:
+            # Must NOT mention operator/worker OR hands/arms
+            for word in self.forbidden_words:
+                pattern = r'\b' + re.escape(word.lower()) + r'\b'
+                if re.search(pattern, caption_lower):
+                    violations.append(f"Forbidden term detected in high-level mode: '{word}'")
+
+        # Length validation
         if len(caption.strip()) == 0:
             violations.append("Caption is empty.")
-        elif len(caption) > 300:
-            violations.append("Caption is too long for a high-level caption (> 300 characters).")
+        elif len(caption) > 350:
+            violations.append("Caption is too long (> 350 characters).")
 
         return (len(violations) == 0, violations)
 
@@ -90,7 +100,7 @@ class VLAValidator:
 
         return self.sanitize_input_text(sanitized)
 
-    def process_oag_response(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def process_oag_response(self, data: Dict[str, Any], mode: str = "high_level") -> Dict[str, Any]:
         """
         Processes, validates, and securely sanitizes complete OAG response dictionary.
         """
@@ -102,18 +112,18 @@ class VLAValidator:
         raw_segments = data.get("suggested_segments", [])
         segments = [self.sanitize_input_text(str(s)) for s in raw_segments if isinstance(s, (str, int, float))]
 
-        # If caption is missing but Object, Action, Goal are present, construct standard formula
         if not caption and obj and act and goal:
-            caption = f"{obj} is {act} {goal}."
+            if mode == "detailed":
+                caption = f"Right hand {act} the {obj} {goal}."
+            else:
+                caption = f"{obj} is {act} {goal}."
 
-        # Validate caption
-        is_valid, violations = self.validate_caption(caption)
+        is_valid, violations = self.validate_caption(caption, mode=mode)
 
-        # If invalid due to forbidden words, attempt auto-sanitization
         sanitized_caption = caption
-        if not is_valid:
+        if not is_valid and mode == "high_level":
             sanitized_caption = self.sanitize_caption(caption)
-            is_valid, violations = self.validate_caption(sanitized_caption)
+            is_valid, violations = self.validate_caption(sanitized_caption, mode=mode)
         else:
             sanitized_caption = self.sanitize_input_text(caption)
 
@@ -124,6 +134,7 @@ class VLAValidator:
             "high_level_caption": sanitized_caption,
             "raw_caption": self.sanitize_input_text(caption),
             "suggested_segments": segments,
+            "annotation_mode": mode,
             "is_valid": is_valid,
             "violations": violations
         }

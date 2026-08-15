@@ -107,15 +107,31 @@ class VLAAppGUI:
         btn_manual = ttk.Button(banner_frame, text="Manual Process Clipboard", style="Action.TButton", command=self.trigger_manual_snip)
         btn_manual.pack(side="right")
 
+        # Mode Switcher Bar
+        mode_frame = tk.Frame(self.tab_live, bg=self.card_bg, padx=15, pady=8)
+        mode_frame.pack(fill="x", pady=(0, 10))
+
+        tk.Label(mode_frame, text="Annotation Mode:", font=("Segoe UI", 10, "bold"), bg=self.card_bg, fg=self.text_color).pack(side="left", padx=(0, 10))
+
+        self.mode_var = tk.StringVar(value=config.get("annotation_mode", "high_level"))
+        rb_t1 = tk.Radiobutton(mode_frame, text="High-Level Overview (T1)", variable=self.mode_var, value="high_level", bg=self.card_bg, fg=self.text_color, selectcolor="#181825", font=("Segoe UI", 10), command=self.on_mode_changed)
+        rb_t1.pack(side="left", padx=5)
+
+        rb_t2 = tk.Radiobutton(mode_frame, text="Detailed Segment Action (T2)", variable=self.mode_var, value="detailed", bg=self.card_bg, fg=self.text_color, selectcolor="#181825", font=("Segoe UI", 10), command=self.on_mode_changed)
+        rb_t2.pack(side="left", padx=5)
+
         # Result Details Card
         self.result_card = tk.Frame(self.tab_live, bg=self.card_bg, padx=15, pady=15)
         self.result_card.pack(fill="both", expand=True)
 
-        # High-Level Caption Output Section
+        # Caption Output Section Header
         caption_header = tk.Frame(self.result_card, bg=self.card_bg)
         caption_header.pack(fill="x", pady=(0, 5))
 
-        tk.Label(caption_header, text="High-Level Caption (T1) - Auto-Copied:", font=("Segoe UI", 11, "bold"), bg=self.card_bg, fg=self.success_color).pack(side="left")
+        self.caption_title_var = tk.StringVar(value="Caption Output - Auto-Copied:")
+        self._update_caption_title()
+
+        tk.Label(caption_header, textvariable=self.caption_title_var, font=("Segoe UI", 11, "bold"), bg=self.card_bg, fg=self.success_color).pack(side="left")
         self.latency_var = tk.StringVar(value="")
         tk.Label(caption_header, textvariable=self.latency_var, font=("Segoe UI", 9), bg=self.card_bg, fg="#9399b2").pack(side="right")
 
@@ -244,8 +260,20 @@ class VLAAppGUI:
         btn_save = ttk.Button(settings_card, text="Save Configuration", style="Action.TButton", command=self.save_settings)
         btn_save.grid(row=6, column=1, sticky="w", pady=16)
 
+    def _update_caption_title(self):
+        m = self.mode_var.get() if hasattr(self, "mode_var") else config.get("annotation_mode", "high_level")
+        if m == "detailed":
+            self.caption_title_var.set("Detailed Segment Action Caption (T2) - Auto-Copied:")
+        else:
+            self.caption_title_var.set("High-Level Overview Caption (T1) - Auto-Copied:")
+
+    def on_mode_changed(self):
+        new_mode = self.mode_var.get()
+        config.set("annotation_mode", new_mode)
+        self._update_caption_title()
+
     def trigger_manual_snip(self):
-        self.status_var.set("Processing clipboard image...")
+        self.status_var.set(f"Processing clipboard image ({self.mode_var.get().upper()} mode)...")
         self.root.update_idletasks()
         clipboard_service._on_hotkey()
 
