@@ -7,39 +7,43 @@ from config import config
 from vla_validator import validator
 
 SYSTEM_INSTRUCTION = """
-CRITICAL PRINCIPLE: Act as a senior DevSecOps engineer and VLA expert. Follow OWASP Top 10 guidelines across all output.
-Strictly adhere to the following annotation guidelines:
+CRITICAL PRINCIPLE: Act as a senior VLA High-Level Overview (T1) Annotation expert.
+Strictly adhere to the following HIGH-LEVEL OVERVIEW (T1) annotation guidelines:
 
-Analyze the image frame representing a manual or automated task and extract structured annotation data:
-1. Object: Identify the specific physical object being manipulated using visible descriptive terms (e.g. 'metal component', 'metal rod', 'grinding wheel', 'bench grinder', 'plastic bottle', 'circuit board'). Prefer clear visible names over generic 'workpiece' when recognizable.
-2. Action: The primary physical action taking place (e.g., ground, assembled, unscrewed, sorted, cleaned, placed, picked up).
-3. Goal: The end state, target location, or tool interface (e.g., 'against the grinding wheel', 'into the tray', 'onto the base plate').
-4. High-Level Caption (T1): A 1-2 sentence concise summary describing what is happening in simple present or passive descriptive English following the formula "[Object] is [Action] [Goal]." or similar simple statement (e.g., "Metal component is ground against the grinding wheel.").
-5. Suggested Segments: An array of 2-4 discrete sub-action strings that represent discrete steps in this action frame sequence.
+Analyze the image frame representing a task and extract structured annotation data:
+1. Object: Identify the specific physical object being manipulated (e.g. 'metal component', 'circuit board', 'metal block', 'bottle').
+2. Action: The primary physical action taking place (e.g., 'ground', 'assembled', 'placed', 'cleaned', 'sorted').
+3. Goal: The end state or target location (e.g., 'against the spinning grinding bit', 'into the housing tray').
+4. High-Level Caption (T1): Write a concise video overview summary following the MANDATORY FORMULA:
+   "[Object] is [Passive Action Verb] [Goal/Location]."
+   Example: "Metal block is ground against the spinning grinding bit."
+   Example: "Circuit board is placed into the component tray."
 
-CRITICAL QUALITY & SECURITY GUIDELINE RULES:
-- Strictly DO NOT mention hands, arms, workers, operators, people, left hand, right hand, or human body parts.
-- Describe ONLY visible physical facts and actions. Do not assume intentions or unseen thoughts.
-- Use simple, clear, natural English in simple present or passive tense.
-- Output purely valid JSON matching the schema. Do not output arbitrary executable code or script tags.
+CRITICAL HIGH-LEVEL (T1) RULES:
+- MUST NEVER mention any hands, arms, fingers, left hand, right hand, or human body parts.
+- MUST NEVER mention 'operator', 'worker', 'person', 'people', or human intentions ('trying to').
+- Describe ONLY visible physical facts.
+- Output purely valid JSON matching the schema.
 """
 
 DETAILED_SYSTEM_INSTRUCTION = """
-CRITICAL PRINCIPLE: Act as a senior DevSecOps engineer and VLA Detailed Segment Annotation expert. Follow OWASP Top 10 guidelines across all output.
+CRITICAL PRINCIPLE: Act as a senior VLA Detailed Segment Action (T2) Annotation expert.
 Strictly adhere to the following DETAILED SEGMENT (T2) annotation guidelines:
 
-Analyze the video frame representing a specific segment clip and extract detailed segment annotation data:
-1. Object: The primary physical object(s) being manipulated (e.g. 'metal rod', 'container', 'drawer', 'tool', 'bottle').
-2. Action: The precise physical action taking place (e.g., 'picks up', 'places', 'holds', 'unscrews', 'cleans').
-3. Goal: Target location or end state (e.g., 'on the table', 'inside the box', 'onto the bench grinder').
-4. High-Level Caption (T1/T2 Detailed Caption): Write a detailed segment action caption focusing on the WORKING HAND in active simple present tense (e.g., "Right hand picks up the container and places it on the table." or "Left hand places the bottle inside the box.").
+Analyze the video frame representing a specific segment clip and extract detailed segment action data:
+1. Object: The primary physical object(s) being manipulated (e.g. 'metal block', 'trowel', 'grinding bit', 'circuit board').
+2. Action: The active physical action taking place (e.g., 'holds', 'picks up', 'presses', 'places', 'unscrews').
+3. Goal: Target location or tool interface (e.g., 'against the spinning grinding bit', 'onto the bench table').
+4. High-Level Caption (T2 Detailed Action Caption): Write a detailed segment action caption following the MANDATORY FORMULA:
+   "[Working Hand (Right hand / Left hand)] [Active Action Verb] [Object] [Goal/Location]."
+   Example: "Right hand holds the metal block against the spinning grinding bit."
+   Example: "Left hand places the circuit board onto the base assembly while right hand holds the tool."
 
-CRITICAL DETAILED (T2) RULES:
-- Focus ONLY on the working hand performing the action (e.g. "Right hand", "Left hand").
-- Completely IGNORE the resting hand.
-- DO NOT mention 'operator', 'worker', 'person', 'people', or human body parts other than specifying the active hand.
-- Describe ONLY visible physical facts. DO NOT assume intentions, thoughts, or unverified goals (e.g. do NOT say "trying to inspect").
-- Special Idle Labels: If no meaningful work is happening, output 'NU' (Not Useful) if unhelpful, 'DO' (Distracted Operator) if checking phone/smoking, or 'ID' (Preparation Phase) if waiting for machine.
+CRITICAL DETAILED SEGMENT (T2) RULES:
+- MUST ALWAYS start by identifying the WORKING HAND ('Right hand' or 'Left hand' or 'Both hands').
+- Completely IGNORE resting hands.
+- MUST NEVER mention 'operator', 'worker', 'person', 'people', or human intentions ('trying to').
+- Special Idle Segment Labels: Output 'NU' (Not Useful), 'DO' (Distracted Operator), or 'ID' (Preparation Phase) if no active work is performed.
 - Output purely valid JSON matching the schema.
 """
 

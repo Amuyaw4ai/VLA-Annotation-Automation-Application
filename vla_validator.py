@@ -112,20 +112,19 @@ class VLAValidator:
         raw_segments = data.get("suggested_segments", [])
         segments = [self.sanitize_input_text(str(s)) for s in raw_segments if isinstance(s, (str, int, float))]
 
-        if not caption and obj and act and goal:
-            if mode == "detailed":
-                caption = f"Right hand {act} the {obj} {goal}."
-            else:
-                caption = f"{obj} is {act} {goal}."
+        if mode == "detailed":
+            # Ensure T2 Detailed caption starts with Working Hand formula or idle label
+            valid_starts = ("right hand", "left hand", "both hands", "nu", "do", "id")
+            if not caption.lower().startswith(valid_starts) and obj and act:
+                caption = f"Right hand {act} the {obj} {goal}.".strip()
+        else:
+            # Ensure T1 High-Level caption strictly obeys passive overview formula without hands
+            caption = self.sanitize_caption(caption)
+            if not caption and obj and act:
+                caption = f"{obj} is {act} {goal}.".strip()
 
         is_valid, violations = self.validate_caption(caption, mode=mode)
-
-        sanitized_caption = caption
-        if not is_valid and mode == "high_level":
-            sanitized_caption = self.sanitize_caption(caption)
-            is_valid, violations = self.validate_caption(sanitized_caption, mode=mode)
-        else:
-            sanitized_caption = self.sanitize_input_text(caption)
+        sanitized_caption = self.sanitize_input_text(caption)
 
         return {
             "object": obj,
