@@ -42,13 +42,13 @@ JSON_SCHEMA = {
 class VLAEngine:
     def __init__(self, api_key: Optional[str] = None, model_name: Optional[str] = None):
         self.api_key = api_key or config.get_api_key()
-        self.model_name = model_name or config.get("gemini_model", "gemini-2.5-flash")
+        self.model_name = model_name or config.get("gemini_model", "gemini-2.0-flash")
         self.client = None
         self._init_client()
 
     def _init_client(self):
         self.api_key = config.get_api_key()
-        self.model_name = config.get("gemini_model", "gemini-2.5-flash")
+        self.model_name = config.get("gemini_model", "gemini-2.0-flash")
         if not self.api_key:
             return
 
@@ -69,6 +69,7 @@ class VLAEngine:
     def analyze_image(self, image: Image.Image) -> Dict[str, Any]:
         """
         Analyzes a PIL Image frame using Gemini Vision API and returns structured OAG result.
+        Includes automatic fallback for deprecated/404 model names.
         """
         api_key = config.get_api_key()
         if not api_key:
@@ -85,55 +86,76 @@ class VLAEngine:
                     "is_valid": False
                 }
 
-        try:
-            # Convert image to PNG bytes securely in memory
-            img_byte_arr = io.BytesIO()
-            image.save(img_byte_arr, format='PNG')
-            img_bytes = img_byte_arr.getvalue()
+        # Convert image to PNG bytes securely in memory
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format='PNG')
+        img_bytes = img_byte_arr.getvalue()
+        prompt_text = "Extract the Object, Action, Goal, High-Level Caption (T1), and Suggested Segments from this task frame adhering strictly to VLA guidelines."
 
-            prompt_text = "Extract the Object, Action, Goal, High-Level Caption (T1), and Suggested Segments from this task frame adhering strictly to VLA guidelines."
+        # Model trial order with auto-fallback
+        candidate_models = [self.model_name]
+        for fallback in ["gemini-2.0-flash", "gemini-1.5-flash"]:
+            if fallback not in candidate_models:
+                candidate_models.append(fallback)
 
-            if self.sdk_type == "new":
-                from google.genai import types
-                response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=[
-                        types.Part.from_bytes(data=img_bytes, mime_type="image/png"),
-                        prompt_text
-                    ],
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_INSTRUCTION,
-                        response_mime_type="application/json",
-                        response_schema=JSON_SCHEMA,
-                        temperature=0.1
+        last_error = None
+
+        for model_to_try in candidate_models:
+            try:
+                if self.sdk_type == "new":
+                    from google.genai import types
+                    response = self.client.models.generate_content(
+                        model=model_to_try,
+                        contents=[
+                            types.Part.from_bytes(data=img_bytes, mime_type="image/png"),
+                            prompt_text
+                        ],
+                        config=types.GenerateContentConfig(
+                            system_instruction=SYSTEM_INSTRUCTION,
+                            response_mime_type="application/json",
+                            response_schema=JSON_SCHEMA,
+                            temperature=0.1
+                        )
                     )
-                )
-                response_text = response.text
-            else:
-                model = self.client.GenerativeModel(
-                    model_name=self.model_name,
-                    system_instruction=SYSTEM_INSTRUCTION
-                )
-                response = model.generate_content(
-                    [image, prompt_text],
-                    generation_config={"response_mime_type": "application/json"}
-                )
-                response_text = response.text
+                    response_text = response.text
+                else:
+                    model = self.client.GenerativeModel(
+                        model_name=model_to_try,
+                        system_instruction=SYSTEM_INSTRUCTION
+                    )
+                    response = model.generate_content(
+                        [image, prompt_text],
+                        generation_config={"response_mime_type": "application/json"}
+                    )
+                    response_text = response.text
 
-            # Parse JSON safely
-            raw_data = json.loads(response_text)
-            processed = validator.process_oag_response(raw_data)
-            return processed
+                # If successful, update saved model choice if it had to fallback
+                if model_to_try != self.model_name:
+                    print(f"[VLAEngine] Model '{self.model_name}' was unavailable. Auto-switched to active model '{model_to_try}'.")
+                    self.model_name = model_to_try
+                    config.set("gemini_model", model_to_try)
 
-        except Exception as e:
-            # Mask any potential sensitive details in error message
-            err_msg = str(e)
-            if api_key in err_msg:
-                err_msg = err_msg.replace(api_key, "[REDACTED_KEY]")
-            print(f"[VLAEngine Security] Inference error: {err_msg}")
-            return {
-                "error": f"Inference failed: {err_msg}",
-                "is_valid": False
-            }
+                # Parse JSON safely
+                raw_data = json.loads(response_text)
+                processed = validator.process_oag_response(raw_data)
+                return processed
+
+            except Exception as e:
+                err_str = str(e)
+                if api_key in err_str:
+                    err_str = err_str.replace(api_key, "[REDACTED_KEY]")
+                last_error = err_str
+                # If 404 / NOT_FOUND, try next candidate model in loop
+                if "404" in err_str or "NOT_FOUND" in err_str or "no longer available" in err_str:
+                    print(f"[VLAEngine] Model '{model_to_try}' returned 404/NOT_FOUND. Trying fallback model...")
+                    continue
+                else:
+                    break
+
+        print(f"[VLAEngine Security] Inference error: {last_error}")
+        return {
+            "error": f"Inference failed: {last_error}",
+            "is_valid": False
+        }
 
 engine = VLAEngine()
