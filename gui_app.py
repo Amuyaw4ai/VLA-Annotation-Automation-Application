@@ -12,8 +12,17 @@ class VLAAppGUI:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("VLA Annotation Automation Assistant - Annotasks")
-        self.root.geometry("850x680")
-        self.root.minsize(750, 580)
+        self.current_ui_mode = config.get("ui_mode", "full")
+        self.is_pinned = config.get("pinned_top", True)
+        self.is_locked = config.get("position_locked", False)
+
+        if self.current_ui_mode == "mini":
+            self.root.minsize(350, 90)
+            self.root.maxsize(800, 200)
+            self.root.geometry("440x115")
+        else:
+            self.root.minsize(750, 580)
+            self.root.geometry("850x680")
 
         # Style configuration
         self.setup_styles()
@@ -21,8 +30,11 @@ class VLAAppGUI:
         # Connect listener callback to UI updater
         clipboard_service.callback = self.on_frame_processed
 
-        # Build UI layout
-        self.build_ui()
+        # Build UI layout according to saved mode
+        if self.current_ui_mode == "mini":
+            self.build_mini_ui()
+        else:
+            self.build_ui()
 
         # Start global hotkey listener
         clipboard_service.start()
@@ -96,65 +108,79 @@ class VLAAppGUI:
             widget.destroy()
 
         if new_mode == "mini":
-            self.root.geometry("450x140")
-            self.root.resizable(False, False)
+            self.root.minsize(350, 90)
+            self.root.maxsize(800, 180)
+            self.root.geometry("440x115")
+            self.root.resizable(True, True)
             self.build_mini_ui()
         else:
+            self.root.maxsize(3000, 3000)
+            self.root.minsize(750, 580)
             self.root.geometry("850x680")
             self.root.resizable(True, True)
             self.build_ui()
 
     def build_mini_ui(self):
-        # Master Mini Frame (450x140, 3-column layout)
-        mini_master = tk.Frame(self.root, bg=self.card_bg, padx=8, pady=8)
+        # Master Mini Frame (Sleek compact bar)
+        mini_master = tk.Frame(self.root, bg=self.card_bg, padx=4, pady=4)
         mini_master.pack(fill="both", expand=True)
 
         # Column 1 (Left ~40%): Caption Text & Badges (Invisible Mouse-Wheel Scroll)
-        col1 = tk.Frame(mini_master, bg="#181825", padx=6, pady=6)
-        col1.pack(side="left", fill="both", expand=True, padx=(0, 4))
+        col1 = tk.Frame(mini_master, bg="#181825", padx=6, pady=4)
+        col1.pack(side="left", fill="both", expand=True, padx=(0, 2))
 
         header_sub = tk.Frame(col1, bg="#181825")
         header_sub.pack(fill="x", pady=(0, 2))
 
-        self.mini_mode_label = tk.Label(header_sub, text="T1 High-Level", font=("Segoe UI", 8, "bold"), bg="#181825", fg=self.success_color)
+        cur_mode = self.mode_var.get() if hasattr(self, "mode_var") else config.get("annotation_mode", "high_level")
+        mode_text = "T2 Detailed" if cur_mode == "detailed" else "T1 High-Level"
+        self.mini_mode_label = tk.Label(header_sub, text=mode_text, font=("Segoe UI", 8, "bold"), bg="#181825", fg=self.success_color)
         self.mini_mode_label.pack(side="left")
 
         self.mini_latency_label = tk.Label(header_sub, text="", font=("Segoe UI", 8), bg="#181825", fg="#9399b2")
         self.mini_latency_label.pack(side="right")
 
         # Invisible-scroll text box
-        self.mini_caption_text = tk.Text(col1, height=4, font=("Segoe UI", 9), bg="#181825", fg=self.text_color, wrap="word", relief="flat", borderwidth=0)
+        self.mini_caption_text = tk.Text(col1, height=3, font=("Segoe UI", 9), bg="#181825", fg=self.text_color, wrap="word", relief="flat", borderwidth=0)
         self.mini_caption_text.pack(fill="both", expand=True)
-        self.mini_caption_text.insert("1.0", "Win+Shift+S snip ➔ Ctrl+Space")
+
+        # Pre-fill active caption if available
+        if clipboard_service.active_captions and cur_mode in clipboard_service.active_captions:
+            cap_data = clipboard_service.active_captions[cur_mode]
+            self.mini_caption_text.insert("1.0", cap_data.get("high_level_caption", ""))
+        else:
+            self.mini_caption_text.insert("1.0", "Win+Shift+S snip ➔ Ctrl+Space")
+
         self.mini_caption_text.bind("<MouseWheel>", self._on_mini_scroll)
 
         # Column 2 (Center ~30%): Toggle Icons & Controls
-        col2 = tk.Frame(mini_master, bg=self.card_bg, padx=4)
+        col2 = tk.Frame(mini_master, bg=self.card_bg, padx=2)
         col2.pack(side="left", fill="y", padx=2)
 
-        self.mini_mode_btn = tk.Button(col2, text=f"Mode: {self.mode_var.get().upper()}", font=("Segoe UI", 8, "bold"), bg="#313244", fg=self.accent_color, relief="flat", pady=2, command=self._toggle_mini_mode_val)
+        m_btn_lbl = f"Mode: {cur_mode.upper()}"
+        self.mini_mode_btn = tk.Button(col2, text=m_btn_lbl, font=("Segoe UI", 7, "bold"), bg="#313244", fg=self.accent_color, relief="flat", pady=1, command=self._toggle_mini_mode_val)
         self.mini_mode_btn.pack(fill="x", pady=1)
 
         auto_st = "⚡ Auto" if config.get("auto_detect_clipboard", False) else "🎯 Manual"
-        self.mini_auto_btn = tk.Button(col2, text=auto_st, font=("Segoe UI", 8), bg="#313244", fg=self.text_color, relief="flat", pady=2, command=self._toggle_mini_auto_val)
+        self.mini_auto_btn = tk.Button(col2, text=auto_st, font=("Segoe UI", 7), bg="#313244", fg=self.text_color, relief="flat", pady=1, command=self._toggle_mini_auto_val)
         self.mini_auto_btn.pack(fill="x", pady=1)
 
-        self.pin_btn = tk.Button(col2, text="📌 Pinned" if self.is_pinned else "📌 Unpinned", font=("Segoe UI", 8), bg="#313244", fg=self.text_color, relief="flat", pady=2, command=self.toggle_pin_top)
+        self.pin_btn = tk.Button(col2, text="📌 Pin" if self.is_pinned else "📌 Unpin", font=("Segoe UI", 7), bg="#313244", fg=self.text_color, relief="flat", pady=1, command=self.toggle_pin_top)
         self.pin_btn.pack(fill="x", pady=1)
 
-        self.lock_btn = tk.Button(col2, text="🔒 Locked" if self.is_locked else "🔓 Unlocked", font=("Segoe UI", 8), bg="#313244", fg=self.text_color, relief="flat", pady=2, command=self.toggle_lock_pos)
+        self.lock_btn = tk.Button(col2, text="🔒 Lock" if self.is_locked else "🔓 Lock", font=("Segoe UI", 7), bg="#313244", fg=self.text_color, relief="flat", pady=1, command=self.toggle_lock_pos)
         self.lock_btn.pack(fill="x", pady=1)
 
-        btn_expand = tk.Button(col2, text="↗ Full View", font=("Segoe UI", 8, "bold"), bg=self.accent_color, fg="#11111b", relief="flat", pady=2, command=self.toggle_ui_mode)
-        btn_expand.pack(fill="x", pady=(2, 0))
+        btn_expand = tk.Button(col2, text="↗ Full", font=("Segoe UI", 7, "bold"), bg=self.accent_color, fg="#11111b", relief="flat", pady=1, command=self.toggle_ui_mode)
+        btn_expand.pack(fill="x", pady=(1, 0))
 
         # Column 3 (Right ~30%): Manual Drop & Process Action Zone
-        col3 = tk.Frame(mini_master, bg="#181825", padx=6, pady=6)
-        col3.pack(side="left", fill="both", padx=(4, 0))
+        col3 = tk.Frame(mini_master, bg="#181825", padx=4, pady=4)
+        col3.pack(side="left", fill="both", padx=(2, 0))
 
-        tk.Label(col3, text="📥 Drop / Action", font=("Segoe UI", 8, "bold"), bg="#181825", fg=self.text_color).pack(pady=(0, 4))
+        tk.Label(col3, text="📥 Drop / Action", font=("Segoe UI", 8, "bold"), bg="#181825", fg=self.text_color).pack(pady=(0, 2))
 
-        btn_proc = tk.Button(col3, text="⚡ Process\nClipboard", font=("Segoe UI", 8, "bold"), bg=self.accent_color, fg="#11111b", relief="flat", pady=4, command=self.trigger_manual_snip)
+        btn_proc = tk.Button(col3, text="⚡ Process\nClipboard", font=("Segoe UI", 8, "bold"), bg=self.accent_color, fg="#11111b", relief="flat", command=self.trigger_manual_snip)
         btn_proc.pack(fill="both", expand=True)
 
     def _toggle_mini_mode_val(self):
