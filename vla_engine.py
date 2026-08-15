@@ -7,7 +7,8 @@ from config import config
 from vla_validator import validator
 
 SYSTEM_INSTRUCTION = """
-You are an expert Visual-Language-Action (VLA) annotation assistant for industrial manipulation and video captioning tasks.
+CRITICAL PRINCIPLE: Act as a senior DevSecOps engineer and VLA expert. Follow OWASP Top 10 guidelines across all output.
+Strictly adhere to the following annotation guidelines:
 
 Analyze the image frame representing a manual or automated task and extract structured annotation data:
 1. Object: The primary physical object(s) being manipulated (use plain, visible terms like 'metal bracket', 'plastic bottle', 'circuit board', 'drawer' - avoid overly technical names).
@@ -16,11 +17,11 @@ Analyze the image frame representing a manual or automated task and extract stru
 4. High-Level Caption (T1): A 1-2 sentence concise summary describing what is happening in simple present or passive descriptive English following the formula "[Object] is [Action] [Goal]." or similar simple statement.
 5. Suggested Segments: An array of 2-4 discrete sub-action strings that represent discrete steps in this action frame sequence.
 
-CRITICAL GUIDELINE RULES:
+CRITICAL QUALITY & SECURITY GUIDELINE RULES:
 - Strictly DO NOT mention hands, arms, workers, operators, people, left hand, right hand, or human body parts.
 - Describe ONLY visible physical facts and actions. Do not assume intentions or unseen thoughts.
 - Use simple, clear, natural English in simple present or passive tense.
-- Output purely valid JSON matching the schema.
+- Output purely valid JSON matching the schema. Do not output arbitrary executable code or script tags.
 """
 
 JSON_SCHEMA = {
@@ -40,13 +41,13 @@ JSON_SCHEMA = {
 
 class VLAEngine:
     def __init__(self, api_key: Optional[str] = None, model_name: Optional[str] = None):
-        self.api_key = api_key or config.get("gemini_api_key", "")
+        self.api_key = api_key or config.get_api_key()
         self.model_name = model_name or config.get("gemini_model", "gemini-2.5-flash")
         self.client = None
         self._init_client()
 
     def _init_client(self):
-        self.api_key = config.get("gemini_api_key", "")
+        self.api_key = config.get_api_key()
         self.model_name = config.get("gemini_model", "gemini-2.5-flash")
         if not self.api_key:
             return
@@ -62,20 +63,21 @@ class VLAEngine:
                 self.client = genai_old
                 self.sdk_type = "legacy"
             except Exception as e:
-                print(f"[VLAEngine] Error initializing Gemini SDK: {e}")
+                print(f"[VLAEngine Security] Error initializing Gemini SDK: {e}")
                 self.client = None
 
     def analyze_image(self, image: Image.Image) -> Dict[str, Any]:
         """
         Analyzes a PIL Image frame using Gemini Vision API and returns structured OAG result.
         """
-        if not self.api_key:
+        api_key = config.get_api_key()
+        if not api_key:
             return {
-                "error": "Gemini API key not configured. Please enter your API key in Settings.",
+                "error": "Gemini API key not configured. Set GEMINI_API_KEY environment variable or enter key in Settings.",
                 "is_valid": False
             }
 
-        if not self.client:
+        if not self.client or self.api_key != api_key:
             self._init_client()
             if not self.client:
                 return {
@@ -84,7 +86,7 @@ class VLAEngine:
                 }
 
         try:
-            # Convert image to PNG bytes
+            # Convert image to PNG bytes securely in memory
             img_byte_arr = io.BytesIO()
             image.save(img_byte_arr, format='PNG')
             img_bytes = img_byte_arr.getvalue()
@@ -118,15 +120,19 @@ class VLAEngine:
                 )
                 response_text = response.text
 
-            # Parse JSON
+            # Parse JSON safely
             raw_data = json.loads(response_text)
             processed = validator.process_oag_response(raw_data)
             return processed
 
         except Exception as e:
-            print(f"[VLAEngine] Inference error: {e}")
+            # Mask any potential sensitive details in error message
+            err_msg = str(e)
+            if api_key in err_msg:
+                err_msg = err_msg.replace(api_key, "[REDACTED_KEY]")
+            print(f"[VLAEngine Security] Inference error: {err_msg}")
             return {
-                "error": f"Inference failed: {str(e)}",
+                "error": f"Inference failed: {err_msg}",
                 "is_valid": False
             }
 

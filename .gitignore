@@ -9,8 +9,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Environment variables & keys
+# Environment variables, keys & local configs
 .env
+config.json
 
 # Session history & logs
 history.json

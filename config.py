@@ -3,13 +3,13 @@ import json
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load .env if present
+# Load .env file if present
 load_dotenv()
 
 CONFIG_FILE = Path(__file__).parent / "config.json"
 
+# Non-sensitive default preferences
 DEFAULT_CONFIG = {
-    "gemini_api_key": os.getenv("GEMINI_API_KEY", ""),
     "gemini_model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
     "global_hotkey": os.getenv("GLOBAL_HOTKEY", "<alt>+<space>"),
     "auto_copy": os.getenv("AUTO_COPY_CLIPBOARD", "true").lower() == "true",
@@ -23,8 +23,15 @@ DEFAULT_CONFIG = {
 }
 
 class Config:
+    """
+    Secure Configuration Manager:
+    Enforces Zero-Secrets-in-Code policy by keeping API credentials strictly in memory
+    or environment variables. Never persists private keys to disk configuration files.
+    """
     def __init__(self):
         self.config_data = DEFAULT_CONFIG.copy()
+        # In-memory sensitive credentials store (never written to config.json)
+        self._runtime_api_key = os.getenv("GEMINI_API_KEY", "")
         self.load()
 
     def load(self):
@@ -32,22 +39,47 @@ class Config:
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     saved = json.load(f)
+                    # Never load API keys from config.json to prevent secret leaks
+                    saved.pop("gemini_api_key", None)
                     self.config_data.update(saved)
             except Exception as e:
-                print(f"[Config] Error loading {CONFIG_FILE}: {e}")
+                print(f"[Config Security] Error loading {CONFIG_FILE}: {e}")
 
     def save(self):
+        """
+        Saves non-sensitive configuration to disk. Strips all secret keys.
+        """
         try:
+            to_save = self.config_data.copy()
+            # Guarantee secret fields are omitted from disk files
+            to_save.pop("gemini_api_key", None)
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump(self.config_data, f, indent=4)
+                json.dump(to_save, f, indent=4)
         except Exception as e:
-            print(f"[Config] Error saving {CONFIG_FILE}: {e}")
+            print(f"[Config Security] Error saving {CONFIG_FILE}: {e}")
+
+    def get_api_key(self) -> str:
+        """
+        Returns API Key from environment or runtime memory store.
+        """
+        return os.getenv("GEMINI_API_KEY") or self._runtime_api_key
+
+    def set_api_key(self, api_key: str):
+        """
+        Sets runtime API Key in memory (does not save to disk).
+        """
+        self._runtime_api_key = api_key.strip()
 
     def get(self, key, default=None):
+        if key == "gemini_api_key":
+            return self.get_api_key()
         return self.config_data.get(key, default)
 
     def set(self, key, value):
-        self.config_data[key] = value
-        self.save()
+        if key == "gemini_api_key":
+            self.set_api_key(value)
+        else:
+            self.config_data[key] = value
+            self.save()
 
 config = Config()

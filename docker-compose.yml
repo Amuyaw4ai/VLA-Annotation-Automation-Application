@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  vla-assistant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vla_automation_assistant
+    restart: unless-stopped
+    read_only: false
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - GLOBAL_HOTKEY=${GLOBAL_HOTKEY:-<alt>+<space>}
+      - AUTO_COPY_CLIPBOARD=${AUTO_COPY_CLIPBOARD:-true}
+      - PLAY_AUDIO_FEEDBACK=${PLAY_AUDIO_FEEDBACK:-true}

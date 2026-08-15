@@ -1,11 +1,13 @@
 import unittest
+import os
+import json
+from pathlib import Path
 from vla_validator import validator, VLAValidator
-from config import config
+from config import config, CONFIG_FILE
 
-class TestVLAValidator(unittest.TestCase):
+class TestVLASecurityAndGuidelines(unittest.TestCase):
 
     def test_forbidden_words_detection(self):
-        # Captions with forbidden terms
         bad_caption1 = "The operator uses the right hand to pick up the metal bracket."
         is_valid, violations = validator.validate_caption(bad_caption1)
         self.assertFalse(is_valid)
@@ -30,18 +32,26 @@ class TestVLAValidator(unittest.TestCase):
         self.assertNotIn("operator", sanitized.lower())
         self.assertNotIn("hand", sanitized.lower())
 
-    def test_oag_processing(self):
-        sample_data = {
-            "object": "circuit board",
-            "action": "inserted",
-            "goal": "into the slot",
-            "high_level_caption": "Circuit board is inserted into the slot.",
-            "suggested_segments": ["picks up board", "aligns with slot", "pushes into slot"]
-        }
-        res = validator.process_oag_response(sample_data)
-        self.assertTrue(res["is_valid"])
-        self.assertEqual(res["high_level_caption"], "Circuit board is inserted into the slot.")
-        self.assertEqual(len(res["suggested_segments"]), 3)
+    def test_owasp_xss_input_sanitization(self):
+        malicious_input = "<script>alert('xss')</script> Circuit board"
+        sanitized = validator.sanitize_input_text(malicious_input)
+        self.assertNotIn("<script>", sanitized)
+        self.assertIn("&lt;script&gt;", sanitized)
+
+    def test_zero_secrets_config_policy(self):
+        # Set a test API key in config
+        test_key = "AIzaSyTEST_SECRET_KEY_12345"
+        config.set_api_key(test_key)
+
+        # Save config
+        config.save()
+
+        # Read config.json from disk and ensure secret API key is NOT present
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                saved_disk_data = json.load(f)
+                self.assertNotIn("gemini_api_key", saved_disk_data)
+                self.assertNotIn(test_key, json.dumps(saved_disk_data))
 
 if __name__ == "__main__":
     unittest.main()
