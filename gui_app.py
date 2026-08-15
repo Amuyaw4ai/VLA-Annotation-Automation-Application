@@ -484,23 +484,25 @@ class VLAAppGUI:
                 self.act_var.set(result.get("action", "-"))
                 self.goal_var.set(result.get("goal", "-"))
 
-        # Update Latency
-        lat = result.get("latency_seconds", 0)
-        self.latency_var.set(f"Latency: {lat}s | Auto-Copied 📋")
+        # Update Latency if present
+        if hasattr(self, "latency_var"):
+            self.latency_var.set(f"Latency: {lat}s | Auto-Copied 📋")
 
-        # Update Segments list
-        self.segments_list.delete(0, "end")
-        for seg in result.get("suggested_segments", []):
-            self.segments_list.insert("end", f"• {seg}")
+        # Update Segments list if present
+        if hasattr(self, "segments_list") and self.segments_list.winfo_exists():
+            self.segments_list.delete(0, "end")
+            for seg in result.get("suggested_segments", []):
+                self.segments_list.insert("end", f"• {seg}")
 
-        # Update Rule Status
-        if result.get("is_valid", False):
-            self.rule_status_var.set("Rule Check: PASS ✅ (100% Client Compliant)")
-            self.rule_status_label.config(fg=self.success_color)
-        else:
-            violations = ", ".join(result.get("violations", []))
-            self.rule_status_var.set(f"Rule Warning ⚠️: {violations}")
-            self.rule_status_label.config(fg=self.danger_color)
+        # Update Rule Status if present
+        if hasattr(self, "rule_status_var") and hasattr(self, "rule_status_label"):
+            if result.get("is_valid", False):
+                self.rule_status_var.set("Rule Check: PASS ✅ (100% Client Compliant)")
+                self.rule_status_label.config(fg=self.success_color)
+            else:
+                violations = ", ".join(result.get("violations", []))
+                self.rule_status_var.set(f"Rule Warning ⚠️: {violations}")
+                self.rule_status_label.config(fg=self.danger_color)
 
         hotkey_str = config.get("global_hotkey", "<alt>+<space>")
         self.status_var.set(f"Hotkey: [{hotkey_str}] Active | Ready for Next Snip")
